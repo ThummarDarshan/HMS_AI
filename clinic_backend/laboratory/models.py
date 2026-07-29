@@ -3,6 +3,8 @@ from django.conf import settings
 from appointments.models import Appointment
 from doctors.models import Doctor
 from patients.models import Patient
+from clinic_backend.fields import EncryptedTextField
+
 
 
 class LabTestType(models.Model):
@@ -58,8 +60,9 @@ class LabReport(models.Model):
     report_file = models.FileField(
         upload_to="lab_reports", max_length=255, verbose_name="lab_report"
     )
-    notes = models.TextField(blank=True, default="")
+    notes = EncryptedTextField(blank=True, default="")
     technician = models.ForeignKey(
+
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,

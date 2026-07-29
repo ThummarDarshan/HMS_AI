@@ -33,8 +33,9 @@ class PatientViewSet(viewsets.ModelViewSet):
         return [IsAuthenticated()]
 
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ["user__first_name", "user__last_name", "user__phone", "uhid"]
+    search_fields = ["user__first_name", "user__last_name", "uhid"]
     ordering_fields = ["created_at", "user__first_name"]
+
     ordering = ["-created_at"]
 
     def create(self, request, *args, **kwargs):

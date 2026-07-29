@@ -12,6 +12,17 @@ JWT_SIGNING_KEY = config("JWT_SIGNING_KEY", default=SECRET_KEY)
 if JWT_SIGNING_KEY == SECRET_KEY:
     raise ImproperlyConfigured("SECRET_KEY and JWT_SIGNING_KEY must be different for enhanced security.")
 
+ENCRYPTION_KEY = config("ENCRYPTION_KEY", default=None)
+if not ENCRYPTION_KEY:
+    raise ImproperlyConfigured("ENCRYPTION_KEY environment variable is required and missing.")
+
+from cryptography.fernet import Fernet
+try:
+    Fernet(ENCRYPTION_KEY.encode("utf-8") if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
+except Exception as e:
+    raise ImproperlyConfigured(f"Invalid ENCRYPTION_KEY provided: {e}")
+
+
 DEBUG = config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = [host.strip() for host in config("ALLOWED_HOSTS", default="").split(",") if host.strip()]
@@ -112,9 +123,19 @@ db_config = dj_database_url.parse(DATABASE_URL, conn_max_age=600, conn_health_ch
 if "postgres" not in db_config.get("ENGINE", ""):
     raise ImproperlyConfigured("Only PostgreSQL database (`postgresql://` or `postgres://`) is supported.")
 
-DATABASES = {
-    "default": db_config
-}
+import sys
+if "test" in sys.argv:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test_db.sqlite3",
+        }
+    }
+else:
+    DATABASES = {
+        "default": db_config
+    }
+
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
