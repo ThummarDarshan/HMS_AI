@@ -60,7 +60,9 @@ cd clinic_backend
 
 # Create and activate virtual environment
 python -m venv venv
-source venv/Scripts/activate  # On Windows
+.\venv\Scripts\Activate.ps1  # PowerShell (Windows)
+# venv\Scripts\activate.bat  # CMD (Windows)
+# source venv/bin/activate   # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
@@ -126,3 +128,16 @@ Distributed under the MIT License. See `LICENSE` for more information.
 ## 📧 Contact
 
 Project Link: [https://github.com/VadsolaKishan/HMS.git](https://github.com/VadsolaKishan/HMS.git)
+
+
+## ALL ID AND PASSWORD
+<!-- Admin 
+vadsolakishan1310@gmail.com Pass - Kishan@12345
+
+Doctor
+darshan@gmail.com Pass - 123456789
+shreeja@gmail.com Pass - shreeja@12345
+
+Patient
+harshal@gmail.com Pass - harshal@12345
+aryan@gmail.com Pass - aryan@12345 -->
