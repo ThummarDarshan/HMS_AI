@@ -159,13 +159,14 @@ Contributions are what make the open source community such an amazing place to l
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
-
-Project Link: [https://github.com/VadsolaKishan/HMS.git](https://github.com/VadsolaKishan/HMS.git)
-
+Darshna Thummar :- darshantce.059@gmail.com
+Kishan Vadsola :- vadsolakishan1310@gmail.com
+Shreeja Upadhyay :- shreejaupdhayaycspitce@gmail.com
 
 ## ALL ID AND PASSWORD
-<!-- Admin 
+ Admin 
 vadsolakishan1310@gmail.com Pass - Kishan@12345
+
 
 Doctor
 darshan@gmail.com Pass - 123456789
@@ -173,4 +174,4 @@ shreeja@gmail.com Pass - shreeja@12345
 
 Patient
 harshal@gmail.com Pass - harshal@12345
-aryan@gmail.com Pass - aryan@12345 -->
+aryan@gmail.com Pass - aryan@12345 
