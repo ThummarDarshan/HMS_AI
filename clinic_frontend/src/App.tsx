@@ -33,6 +33,7 @@ import { InvoicePrint } from "@/components/billing/InvoicePrint";
 import { NotificationList } from "@/components/notifications/NotificationList";
 import { SupportList } from "@/components/support/SupportList";
 import { LabRequestList } from "@/components/laboratory/LabRequestList";
+import { PatientHealthAssistant } from "@/components/assistant/PatientHealthAssistant";
 import { LabTestTypeList } from "@/components/laboratory/LabTestTypeList";
 import { MyLabReports } from "@/components/laboratory/MyLabReports";
 import { PageLoader } from "@/components/common/Loader";
@@ -179,6 +180,9 @@ const App = () => (
             {/* Protected Routes with Layout */}
             <Route element={<PrivateRoute><DashboardLayout title="Dashboard" /></PrivateRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
+            </Route>
+            <Route element={<PrivateRoute allowedRoles={['PATIENT', 'ADMIN', 'DOCTOR']}><DashboardLayout title="AI Health Assistant" /></PrivateRoute>}>
+              <Route path="/ai-assistant" element={<PatientHealthAssistant />} />
             </Route>
             <Route element={<PrivateRoute><DashboardLayout title="My Profile" /></PrivateRoute>}>
               <Route path="/profile" element={<Profile />} />

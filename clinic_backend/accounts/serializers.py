@@ -58,7 +58,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=10)
     confirm_password = serializers.CharField(write_only=True)
 
     class Meta:
@@ -114,7 +114,7 @@ class VerifyResetTokenSerializer(serializers.Serializer):
 
 class ResetPasswordSerializer(serializers.Serializer):
     token = serializers.CharField()
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=10)
     confirm_password = serializers.CharField(write_only=True)
 
     def validate(self, attrs):
