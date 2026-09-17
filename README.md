@@ -6,6 +6,7 @@ It provides an integrated ecosystem featuring a beautiful, user-friendly, and re
 
 ## 🌟 Key Features
 
+*   **AI Health & Medication Assistant**: Grounded RAG-based clinical medication & symptom assistant embedded in the Patient Portal, backed by official CDSCO (Govt of India) and DailyMed (FDA) regulatory monographs. Features emergency red flag detection, allergy conflict alerts, strict anti-prescription guardrails, and verified source citations.
 *   **User & Role Management**: Secure authentication system with role-based access control (Admin, Doctor, Patient, Staff).
 *   **Patient Management**: Complete digital tracking of patient records, history, and admission details.
 *   **Appointment Scheduling**: Seamless booking, rescheduling, and management of patient-doctor appointments.
@@ -60,7 +61,9 @@ cd clinic_backend
 
 # Create and activate virtual environment
 python -m venv venv
-source venv/Scripts/activate  # On Windows
+.\venv\Scripts\Activate.ps1  # PowerShell (Windows)
+# venv\Scripts\activate.bat  # CMD (Windows)
+# source venv/bin/activate   # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
@@ -109,6 +112,38 @@ E:\Hospital_Management_System\
     └── vite.config.ts
 ```
 
+## 🤖 AI Health & Medication Assistant (RAG System)
+
+The system includes a production-grade, medically responsible **AI Health & Medication Assistant** embedded directly in the Patient Dashboard and Sidebar.
+
+### 🛡️ Safety & Clinical Guardrails
+1. **Authoritative Sources Only**: Answers are strictly grounded in regulatory medical documentation from **CDSCO** (Central Drugs Standard Control Organisation, India) and **DailyMed** (FDA Structured Product Labeling).
+2. **Deterministic Emergency Detector**: Automatically flags acute red-flag symptoms (severe chest pain, breathing distress, stroke symptoms, anaphylaxis, severe hemorrhage, self-harm) and instructs immediate emergency services (108 / 112) while halting medication discussion.
+3. **Allergy Conflict Checker**: Cross-checks retrieved drugs and active ingredients against the authenticated patient's registered hospital allergies.
+4. **Anti-Prescription Guardrail**: Strictly prohibits autonomous drug prescribing. Recommends physician consultation and links directly to HMS doctor appointment booking.
+5. **Prompt Injection & Hallucination Defense**: System prompts and RAG retrieval pipelines treat all user inputs and retrieved documents as data rather than instructions. If a query cannot be verified, it explicitly responds: *"I could not verify this information from the approved medication documentation."*
+
+### 📥 Medication Knowledge Base Ingestion Commands
+```bash
+cd clinic_backend
+
+# Seed all verified CDSCO & DailyMed monographs
+python manage.py seed_medications
+
+# Sync a specific medication from providers
+python manage.py sync_medications --drug paracetamol
+```
+
+### 🧪 Running Tests
+```bash
+# Backend AI assistant unit & safety tests
+python manage.py test ai_assistant --keepdb
+
+# Frontend build & type checking
+cd ../clinic_frontend
+npm run build
+```
+
 ## 🤝 Contributing
 
 Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
@@ -124,5 +159,19 @@ Contributions are what make the open source community such an amazing place to l
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ## 📧 Contact
+Darshna Thummar :- darshantce.059@gmail.com
+Kishan Vadsola :- vadsolakishan1310@gmail.com
+Shreeja Upadhyay :- shreejaupdhayaycspitce@gmail.com
 
-Project Link: [https://github.com/VadsolaKishan/HMS.git](https://github.com/VadsolaKishan/HMS.git)
+## ALL ID AND PASSWORD
+ Admin 
+vadsolakishan1310@gmail.com Pass - Kishan@12345
+
+
+Doctor
+darshan@gmail.com Pass - 123456789
+shreeja@gmail.com Pass - shreeja@12345
+
+Patient
+harshal@gmail.com Pass - harshal@12345
+aryan@gmail.com Pass - aryan@12345 

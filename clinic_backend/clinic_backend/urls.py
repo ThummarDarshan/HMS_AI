@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/support/", include("support.urls")),
     path("api/beds/", include("beds.urls")),
     path("api/laboratory/", include("laboratory.urls")),
+    path("api/ai-assistant/", include("ai_assistant.urls")),
 ]
 
 if settings.DEBUG:

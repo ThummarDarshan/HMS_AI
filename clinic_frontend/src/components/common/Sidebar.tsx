@@ -15,6 +15,7 @@ import {
   BedDouble,
   FlaskConical,
   TestTubes,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,12 @@ const menuItems = [
     icon: LayoutDashboard,
     path: '/dashboard',
     roles: [ROLES.ADMIN, ROLES.DOCTOR, ROLES.STAFF, ROLES.PATIENT, ROLES.LAB_TECHNICIAN],
+  },
+  {
+    title: 'AI Health Assistant',
+    icon: Sparkles,
+    path: '/ai-assistant',
+    roles: [ROLES.PATIENT, ROLES.ADMIN, ROLES.DOCTOR],
   },
   {
     title: 'Appointments',

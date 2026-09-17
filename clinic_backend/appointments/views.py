@@ -2,6 +2,7 @@ from rest_framework import viewsets, status, serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction, IntegrityError
 from django.utils import timezone
 from .models import Appointment
 from .serializers import AppointmentSerializer
@@ -62,15 +63,32 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         return queryset
 
+    # ------------------------------------------------------------------
+    # Helper: validate a status transition
+    # ------------------------------------------------------------------
+    def _validate_transition(self, current_status, new_status):
+        """
+        Return True if transitioning from current_status → new_status
+        is allowed by the appointment lifecycle.
+        """
+        allowed = Appointment.VALID_TRANSITIONS.get(current_status, set())
+        return new_status in allowed
+
+    # ------------------------------------------------------------------
+    # CREATE  — with atomic + IntegrityError guard
+    # ------------------------------------------------------------------
     def perform_create(self, serializer):
         """
         When creating a new appointment:
         - If user is PATIENT, automatically assign them as the patient
         - If user is ADMIN/STAFF, they can specify the patient
         - DOCTOR role is rejected (doctors receive appointments, not create)
-        """
-        from django.db import transaction, IntegrityError
 
+        Uses transaction.atomic() so the serializer validation + INSERT
+        happen inside one transaction.  If a concurrent request sneaks
+        past the serializer check, the database UniqueConstraint raises
+        IntegrityError which we convert to HTTP 409.
+        """
         user = self.request.user
 
         if user.role == "DOCTOR":
@@ -102,21 +120,52 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                         )
                 else:
                     appointment = serializer.save()
-        except IntegrityError:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["This time slot is already booked. Please choose another."]}
-            )
 
+        except IntegrityError as e:
+            if "unique_active_doctor_slot" in str(e):
+                raise serializers.ValidationError(
+                    {
+                        "appointment_time": (
+                            "This slot was just booked by another user. "
+                            "Please choose a different time."
+                        )
+                    }
+                )
+            raise  # Re-raise unexpected IntegrityErrors
+
+    # ------------------------------------------------------------------
+    # UPDATE  — with atomic + select_for_update + transition validation
+    # ------------------------------------------------------------------
     def perform_update(self, serializer):
-        from django.db import transaction, IntegrityError
-
+        """
+        Wrap every update in a transaction with a row-level lock to
+        prevent concurrent status changes from creating inconsistencies.
+        """
         try:
             with transaction.atomic():
-                instance = Appointment.objects.select_for_update().get(id=self.get_object().id)
+                # Lock the row to prevent concurrent modifications
+                instance = (
+                    Appointment.objects.select_for_update()
+                    .get(pk=self.get_object().pk)
+                )
                 old_status = instance.status
+                new_status = serializer.validated_data.get("status", old_status)
+
+                # Validate state transition if status is changing
+                if new_status != old_status:
+                    if not self._validate_transition(old_status, new_status):
+                        raise serializers.ValidationError(
+                            {
+                                "status": (
+                                    f"Cannot transition from {old_status} "
+                                    f"to {new_status}."
+                                )
+                            }
+                        )
+
                 appointment = serializer.save()
 
-                # Check for status changes
+                # Check for status changes and send notifications
                 if old_status != appointment.status:
                     if appointment.status == "APPROVED":
                         # Notify Patient
@@ -143,16 +192,25 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                             title="Consultation Completed",
                             message=f"Your visit with Dr. {appointment.doctor.user.full_name} has been marked as completed",
                         )
-        except IntegrityError:
-            raise serializers.ValidationError(
-                {"non_field_errors": ["This time slot is already booked. Please choose another."]}
-            )
 
+        except IntegrityError as e:
+            if "unique_active_doctor_slot" in str(e):
+                raise serializers.ValidationError(
+                    {
+                        "appointment_time": (
+                            "This slot was just booked by another user. "
+                            "Please choose a different time."
+                        )
+                    }
+                )
+            raise
+
+    # ------------------------------------------------------------------
+    # APPROVE
+    # ------------------------------------------------------------------
     @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         """Approve an appointment - only ADMIN can approve"""
-        from django.db import transaction
-
         user = request.user
 
         # Only ADMIN can approve appointments
@@ -162,36 +220,63 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        with transaction.atomic():
-            appointment = Appointment.objects.select_for_update().get(pk=pk)
-
-            if appointment.status != "PENDING":
-                return Response(
-                    {"error": f"Cannot approve appointment in {appointment.status} state."},
-                    status=status.HTTP_409_CONFLICT,
+        try:
+            with transaction.atomic():
+                # Lock the appointment row
+                appointment = (
+                    Appointment.objects.select_for_update()
+                    .get(pk=self.get_object().pk)
                 )
 
-            appointment.status = "APPROVED"
-            appointment.save()
+                # Validate lifecycle transition
+                if not self._validate_transition(appointment.status, "APPROVED"):
+                    return Response(
+                        {
+                            "error": (
+                                f"Cannot approve appointment with status "
+                                f"'{appointment.status}'."
+                            )
+                        },
+                        status=status.HTTP_409_CONFLICT,
+                    )
 
-            # Notify patient of approval
-            Notification.objects.create(
-                user=appointment.patient.user,
-                title="Appointment Approved",
-                message=f"Your appointment with Dr. {appointment.doctor.user.full_name} has been approved",
-            )
+                appointment.status = "APPROVED"
+                appointment.save()
 
-            # Notify Doctor
-            Notification.objects.create(
-                user=appointment.doctor.user,
-                title="New Appointment Scheduled",
-                message=f"You have a new appointment with {appointment.patient.user.full_name} on {appointment.appointment_date} at {appointment.appointment_time}",
-            )
+                # Notify patient of approval
+                Notification.objects.create(
+                    user=appointment.patient.user,
+                    title="Appointment Approved",
+                    message=f"Your appointment with Dr. {appointment.doctor.user.full_name} has been approved",
+                )
+
+                # Notify Doctor
+                Notification.objects.create(
+                    user=appointment.doctor.user,
+                    title="New Appointment Scheduled",
+                    message=f"You have a new appointment with {appointment.patient.user.full_name} on {appointment.appointment_date} at {appointment.appointment_time}",
+                )
+
+        except IntegrityError as e:
+            if "unique_active_doctor_slot" in str(e):
+                return Response(
+                    {
+                        "error": (
+                            "This slot was just booked by another user. "
+                            "Please choose a different time."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+            raise
 
         return Response(
             {"status": "APPROVED", "message": "Appointment approved successfully"}
         )
 
+    # ------------------------------------------------------------------
+    # CANCEL
+    # ------------------------------------------------------------------
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         """
@@ -200,17 +285,31 @@ class AppointmentViewSet(viewsets.ModelViewSet):
           (PENDING or APPROVED).
         - Admins can cancel any appointment.
         """
-        from django.db import transaction
-
         user = request.user
 
         with transaction.atomic():
-            appointment = Appointment.objects.select_for_update().get(pk=pk)
+            # Lock the appointment row
+            appointment = (
+                Appointment.objects.select_for_update()
+                .get(pk=self.get_object().pk)
+            )
+
+            # Validate lifecycle transition
+            if not self._validate_transition(appointment.status, "CANCELLED"):
+                return Response(
+                    {
+                        "error": (
+                            f"Cannot cancel appointment with status "
+                            f"'{appointment.status}'."
+                        )
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
 
             can_cancel = False
             if user.role == "PATIENT" and appointment.patient.user == user:
                 # Only allow cancelling active appointments
-                if appointment.status in ("PENDING", "APPROVED"):
+                if appointment.status in Appointment.ACTIVE_STATUSES:
                     can_cancel = True
             elif user.role == "ADMIN":
                 can_cancel = True
@@ -219,12 +318,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 return Response(
                     {"error": "You do not have permission to cancel this appointment"},
                     status=status.HTTP_403_FORBIDDEN,
-                )
-
-            if appointment.status in ["CANCELLED", "REJECTED", "VISITED"]:
-                return Response(
-                    {"error": f"Cannot cancel appointment in {appointment.status} state."},
-                    status=status.HTTP_409_CONFLICT,
                 )
 
             appointment.status = "CANCELLED"
@@ -242,11 +335,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             {"status": "CANCELLED", "message": "Appointment cancelled successfully"}
         )
 
+    # ------------------------------------------------------------------
+    # REJECT
+    # ------------------------------------------------------------------
     @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         """Reject/Decline an appointment - only ADMIN can reject"""
-        from django.db import transaction
-
         user = request.user
 
         # Only ADMIN can reject appointments
@@ -257,11 +351,21 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             )
 
         with transaction.atomic():
-            appointment = Appointment.objects.select_for_update().get(pk=pk)
+            # Lock the appointment row
+            appointment = (
+                Appointment.objects.select_for_update()
+                .get(pk=self.get_object().pk)
+            )
 
-            if appointment.status not in ["PENDING", "APPROVED"]:
+            # Validate lifecycle transition
+            if not self._validate_transition(appointment.status, "REJECTED"):
                 return Response(
-                    {"error": f"Cannot reject appointment in {appointment.status} state."},
+                    {
+                        "error": (
+                            f"Cannot reject appointment with status "
+                            f"'{appointment.status}'."
+                        )
+                    },
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -278,6 +382,9 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         return Response({"status": "REJECTED", "message": "Appointment rejected"})
 
+    # ------------------------------------------------------------------
+    # UPCOMING
+    # ------------------------------------------------------------------
     @action(detail=False, methods=["get"])
     def upcoming(self, request):
         """Get upcoming appointments"""

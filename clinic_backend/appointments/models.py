@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from patients.models import Patient
 from doctors.models import Doctor
 
@@ -11,6 +12,18 @@ class Appointment(models.Model):
         ("CANCELLED", "Cancelled"),
         ("VISITED", "Visited"),
     ]
+
+    # Statuses that occupy a doctor's slot (prevent double-booking)
+    ACTIVE_STATUSES = ("PENDING", "APPROVED")
+
+    # Valid state transitions for the appointment lifecycle
+    VALID_TRANSITIONS = {
+        "PENDING": {"APPROVED", "REJECTED", "CANCELLED"},
+        "APPROVED": {"VISITED", "CANCELLED"},
+        "VISITED": set(),       # Terminal state
+        "CANCELLED": set(),     # Terminal state
+        "REJECTED": set(),      # Terminal state
+    }
 
     CASE_TYPE_CHOICES = [("NEW", "New"), ("OLD", "Old")]
 
@@ -33,11 +46,14 @@ class Appointment(models.Model):
         db_table = "appointments"
         ordering = ["-appointment_date", "-appointment_time"]
         constraints = [
+            # Prevent double-booking: only ONE active (PENDING/APPROVED)
+            # appointment per doctor+date+time slot. Cancelled, Rejected,
+            # and Visited appointments are excluded so slots can be reused.
             models.UniqueConstraint(
                 fields=["doctor", "appointment_date", "appointment_time"],
-                condition=models.Q(status__in=["PENDING", "APPROVED"]),
-                name="unique_active_appointment_slot"
-            )
+                condition=Q(status__in=("PENDING", "APPROVED")),
+                name="unique_active_doctor_slot",
+            ),
         ]
 
     def __str__(self):

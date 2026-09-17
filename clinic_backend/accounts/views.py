@@ -4,15 +4,16 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework.views import APIView
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.utils.decorators import method_decorator
 from django.contrib.auth import authenticate, password_validation
-from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError, ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.conf import settings
@@ -28,7 +29,7 @@ from .serializers import (
     VerifyResetTokenSerializer,
     ResetPasswordSerializer,
 )
-from .cookie_utils import set_auth_cookie, delete_auth_cookie
+from .cookie_utils import set_auth_cookie, delete_auth_cookie, clear_auth_cookie, get_refresh_from_cookie
 from .permissions import IsAdmin
 from doctors.models import Doctor, Department
 import string
@@ -49,6 +50,107 @@ def send_email_async(subject, message, from_email, recipient_list):
     except Exception as e:
         print(f"Error sending email: {str(e)}")
 
+
+# ---------------------------------------------------------------------------
+# CSRF Cookie Endpoint
+# ---------------------------------------------------------------------------
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class CSRFGeneratorView(APIView):
+    """
+    GET /api/accounts/csrf/
+    Sets the CSRF cookie so the React frontend can read it and include
+    it in subsequent state-mutating requests.
+    Authentication is not required for this endpoint.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response({"csrfToken": get_token(request), "message": "CSRF cookie set"}, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Logout View
+# ---------------------------------------------------------------------------
+
+class LogoutView(APIView):
+    """
+    POST /api/accounts/logout/
+    Blacklists the refresh token and clears the HttpOnly cookie.
+    The refresh token is read from the HttpOnly cookie (preferred) or
+    from the JSON body as a fallback.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        # Try cookie first, then body fallback
+        refresh_token_str = get_refresh_from_cookie(request) or request.data.get("refresh")
+
+        response = Response(
+            {"message": "Logged out successfully"},
+            status=status.HTTP_200_OK,
+        )
+        if refresh_token_str:
+            try:
+                token = RefreshToken(refresh_token_str)
+                token.blacklist()
+            except Exception:
+                pass
+        clear_auth_cookie(response)
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Cookie-based Token Refresh View
+# ---------------------------------------------------------------------------
+
+class CookieTokenRefreshView(APIView):
+    """
+    POST /api/accounts/token/refresh/
+    Reads the refresh token from the HttpOnly cookie, issues a new
+    access token (and rotated refresh token which is re-set in cookie).
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        refresh_token_str = get_refresh_from_cookie(request) or request.data.get("refresh")
+
+        if not refresh_token_str:
+            return Response(
+                {"error": "Refresh token cookie not found. Please log in again."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        try:
+            token = RefreshToken(refresh_token_str)
+            new_access = str(token.access_token)
+
+            # With ROTATE_REFRESH_TOKENS=True, a new refresh token is issued
+            new_refresh = str(token)
+
+        except TokenError as e:
+            return Response(
+                {"error": "Refresh token is invalid or expired. Please log in again."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        response = Response(
+            {"access": new_access},
+            status=status.HTTP_200_OK,
+        )
+        # Rotate the refresh token cookie
+        set_auth_cookie(response, new_refresh)
+        return response
+
+
+# ---------------------------------------------------------------------------
+# Main User ViewSet
+# ---------------------------------------------------------------------------
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
@@ -93,12 +195,13 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def register(self, request):
         """
-        User Registration
+        User Registration – returns access token in JSON, refresh in HttpOnly cookie.
         """
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             refresh = RefreshToken.for_user(user)
+
             response = Response(
                 {
                     "message": "User registered successfully",
@@ -109,20 +212,22 @@ class UserViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_201_CREATED,
             )
-            return set_auth_cookie(response, refresh)
+            set_auth_cookie(response, refresh)
+            return response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def login(self, request):
         """
-        User Login with JWT
+        User Login with JWT.
+        - Access token is returned in the JSON response body (stored in memory by client).
+        - Refresh token is stored in an HttpOnly cookie (not accessible to JS).
         """
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data["email"]
             password = serializer.validated_data["password"]
 
-            # Try to get user by email and check password
             try:
                 user = User.objects.get(email=email)
                 if user.check_password(password):
@@ -133,6 +238,7 @@ class UserViewSet(viewsets.ModelViewSet):
                         )
 
                     refresh = RefreshToken.for_user(user)
+
                     response = Response(
                         {
                             "message": "Login successful",
@@ -143,7 +249,8 @@ class UserViewSet(viewsets.ModelViewSet):
                         },
                         status=status.HTTP_200_OK,
                     )
-                    return set_auth_cookie(response, refresh)
+                    set_auth_cookie(response, refresh)
+                    return response
                 else:
                     return Response(
                         {"error": "Invalid credentials"},
@@ -159,7 +266,8 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], permission_classes=[AllowAny])
     def google_login(self, request):
         """
-        User Login with Google
+        User Login with Google.
+        Same cookie pattern: refresh in HttpOnly cookie, access in JSON body.
         """
         import requests as api_requests
 
@@ -186,14 +294,14 @@ class UserViewSet(viewsets.ModelViewSet):
             email = idinfo.get("email")
             first_name = idinfo.get("given_name", "")
             last_name = idinfo.get("family_name", "")
-            
+
             # Fallback if Google only provides 'name'
             if not first_name and "name" in idinfo:
                 name_parts = idinfo["name"].split(" ", 1)
                 first_name = name_parts[0]
                 if len(name_parts) > 1:
                     last_name = name_parts[1]
-                    
+
             # Ultimate fallback if no name is provided
             if not first_name:
                 first_name = email.split("@")[0]
@@ -221,6 +329,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 )
 
             refresh = RefreshToken.for_user(user)
+
             response = Response(
                 {
                     "message": "Login successful",
@@ -231,7 +340,8 @@ class UserViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK,
             )
-            return set_auth_cookie(response, refresh)
+            set_auth_cookie(response, refresh)
+            return response
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -239,7 +349,8 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], permission_classes=[IsAdmin])
     def create_doctor(self, request):
         """
-        Create a Doctor account (Admin only)
+        Create a Doctor account (Admin only).
+        Uses Django's validate_password() for strong password enforcement.
         """
         data = request.data
         email = data.get("email")
@@ -257,15 +368,16 @@ class UserViewSet(viewsets.ModelViewSet):
 
         if len(password) < 8:
             return Response(
-                {"non_field_errors": ["Password must be at least 8 characters long"]},
+                {"error": "Password must be at least 8 characters long"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Use Django's built-in password validators (min length 8, common, numeric)
         try:
-            password_validation.validate_password(password)
-        except ValidationError as e:
+            validate_password(password)
+        except DjangoValidationError as e:
             return Response(
-                {"non_field_errors": list(e.messages)},
+                {"error": list(e.messages)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -366,13 +478,9 @@ class UserViewSet(viewsets.ModelViewSet):
         """
         Get list of users with role='DOCTOR' who don't have a Doctor profile yet
         """
-        # Import inside method to avoid circular import if needed, though models is imported
         from doctors.models import Doctor
 
-        # Get IDs of users who already have a Doctor profile
         existing_doctor_user_ids = Doctor.objects.values_list("user_id", flat=True)
-
-        # Filter users with role DOCTOR who are NOT in the existing list
         pending_users = User.objects.filter(role="DOCTOR").exclude(
             id__in=existing_doctor_user_ids
         )
@@ -431,7 +539,6 @@ Hospital Management System
             email_thread.daemon = True
             email_thread.start()
 
-            # Return success immediately without waiting for email to complete
             return Response(
                 {"message": "Password reset link has been sent to your email"},
                 status=status.HTTP_200_OK,
@@ -483,41 +590,3 @@ Hospital Management System
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class CookieTokenRefreshView(TokenRefreshView):
-    def post(self, request, *args, **kwargs):
-        refresh_token = request.COOKIES.get("refresh_token")
-        if not refresh_token:
-            return Response({"error": "Refresh token not found"}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        # Inject refresh token into data for serializer
-        request.data["refresh"] = refresh_token
-        try:
-            response = super().post(request, *args, **kwargs)
-            # Response data has both access and new refresh token (if ROTATE_REFRESH_TOKENS=True)
-            if "refresh" in response.data:
-                refresh_token = response.data.pop("refresh")
-                response = set_auth_cookie(response, refresh_token)
-            return response
-        except TokenError as e:
-            raise InvalidToken(e.args[0])
-
-class LogoutView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        refresh_token = request.COOKIES.get("refresh_token")
-        response = Response({"message": "Logout successful"}, status=status.HTTP_200_OK)
-        if refresh_token:
-            try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
-            except Exception:
-                pass
-        return delete_auth_cookie(response)
-
-@method_decorator(ensure_csrf_cookie, name='dispatch')
-class CSRFGeneratorView(APIView):
-    permission_classes = [AllowAny]
-
-    def get(self, request):
-        return Response({"csrfToken": get_token(request)})

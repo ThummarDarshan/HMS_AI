@@ -15,7 +15,8 @@ import {
   ClipboardList,
   FlaskConical,
   CheckCircle2,
-  Eye
+  Eye,
+  Sparkles,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -286,6 +287,13 @@ export const Dashboard = () => {
             <p className="text-muted-foreground">Welcome back, {user?.first_name || 'Patient'}!</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/ai-assistant')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all shadow-sm"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>AI Health Assistant</span>
+            </button>
             <button
               onClick={() => navigate('/appointments/new')}
               className="btn-gradient flex items-center gap-2 shadow-lg shadow-blue-500/20"

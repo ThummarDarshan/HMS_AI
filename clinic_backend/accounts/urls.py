@@ -7,7 +7,9 @@ router.register(r"users", UserViewSet, basename="user")
 
 urlpatterns = [
     path("", include(router.urls)),
-    path("users/token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
-    path("users/logout/", LogoutView.as_view(), name="logout"),
     path("csrf/", CSRFGeneratorView.as_view(), name="csrf"),
+    path("logout/", LogoutView.as_view(), name="logout_direct"),
+    path("users/logout/", LogoutView.as_view(), name="logout"),
+    path("users/token/refresh/", CookieTokenRefreshView.as_view(), name="token_refresh"),
 ]
+
