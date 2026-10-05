@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -21,7 +21,6 @@ export const BillingForm = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,10 +34,6 @@ export const BillingForm = () => {
   useEffect(() => {
     fetchAppointments();
   }, []);
-
-  useEffect(() => {
-    filterAppointments();
-  }, [appointments, searchTerm]);
 
   const fetchAppointments = async () => {
     try {
@@ -60,7 +55,7 @@ export const BillingForm = () => {
     }
   };
 
-  const filterAppointments = () => {
+  const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
     if (searchTerm) {
@@ -72,8 +67,8 @@ export const BillingForm = () => {
       );
     }
 
-    setFilteredAppointments(filtered);
-  };
+    return filtered;
+  }, [appointments, searchTerm]);
 
   const handleSelectAppointment = async (appointment: Appointment) => {
     setSelectedAppointment(appointment);

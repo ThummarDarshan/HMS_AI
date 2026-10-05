@@ -47,7 +47,7 @@ class GeminiLLMProvider(BaseLLMProvider):
 
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-1.5-flash"):
         self.api_key = api_key or config("GEMINI_API_KEY", default=config("LLM_API_KEY", default=""))
-        self.model_name = config("LLM_MODEL", default=model)
+        self.model_name = config("GEMINI_MODEL", default=config("LLM_MODEL", default=model))
 
     def generate_chat_response(
         self,

@@ -8,6 +8,7 @@ import {
   CheckCircle,
   Eye,
   Printer,
+  ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { PageLoader } from '@/components/common/Loader';
@@ -75,12 +76,34 @@ export const BillingList = () => {
     setFilteredBills(filtered);
   };
 
+  const selectedBillBalance = selectedBill
+    ? Math.max(0, Number(selectedBill.final_amount ?? selectedBill.total_amount) - Number(selectedBill.paid_amount || 0))
+    : 0;
+
   const handleMarkPaid = async () => {
     if (!selectedBill || !paymentData.amount) return;
+    const amountNum = parseFloat(paymentData.amount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid Amount',
+        description: 'Please enter a valid payment amount',
+      });
+      return;
+    }
+    if (amountNum > selectedBillBalance) {
+      toast({
+        variant: 'destructive',
+        title: 'Amount Exceeded',
+        description: `Amount cannot exceed balance due of ${formatCurrency(selectedBillBalance)}`,
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const response = await billingService.markPaid(selectedBill.id, {
-        amount: parseFloat(paymentData.amount),
+        amount: amountNum,
         payment_method: paymentData.method,
       });
 
@@ -325,7 +348,7 @@ export const BillingList = () => {
         title="Record Payment"
         size="sm"
       >
-        <div className="space-y-6">
+        <div className="space-y-6 pb-2">
           <div>
             <p className="text-sm text-muted-foreground mb-2">Invoice</p>
             <p className="font-medium text-foreground">{selectedBill?.invoice_number}</p>
@@ -342,38 +365,65 @@ export const BillingList = () => {
             </label>
             <input
               type="number"
+              min="0.01"
+              max={selectedBillBalance}
+              step="any"
               value={paymentData.amount}
-              onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === '') {
+                  setPaymentData({ ...paymentData, amount: '' });
+                  return;
+                }
+                const num = parseFloat(val);
+                if (isNaN(num)) return;
+                if (num < 0) {
+                  setPaymentData({ ...paymentData, amount: '0' });
+                  return;
+                }
+                if (num > selectedBillBalance) {
+                  setPaymentData({ ...paymentData, amount: String(selectedBillBalance) });
+                  return;
+                }
+                setPaymentData({ ...paymentData, amount: val });
+              }}
               className="input-field"
             />
+            <p className="text-xs text-muted-foreground mt-1.5 flex justify-between">
+              <span>Cannot exceed balance due</span>
+              <span className="font-semibold text-primary">Max: {formatCurrency(selectedBillBalance)}</span>
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">
               Payment Method
             </label>
-            <select
-              value={paymentData.method}
-              onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}
-              className="input-field"
-            >
-              {PAYMENT_METHODS.map((pm) => (
-                <option key={pm.value} value={pm.value}>
-                  {pm.label}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <select
+                value={paymentData.method}
+                onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}
+                className="input-field pr-10 appearance-none cursor-pointer"
+              >
+                {PAYMENT_METHODS.map((pm) => (
+                  <option key={pm.value} value={pm.value} className="bg-card text-foreground">
+                    {pm.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            </div>
           </div>
-          <div className="flex justify-end gap-4 pt-4">
+          <div className="flex justify-end gap-3 pt-6 border-t border-border/40 mt-8 pb-4">
             <button
               onClick={() => setShowPayModal(false)}
-              className="rounded-xl px-4 py-2 text-muted-foreground hover:bg-muted transition-colors"
+              className="rounded-xl px-5 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleMarkPaid}
               disabled={isProcessing}
-              className="btn-gradient flex items-center gap-2"
+              className="btn-gradient flex items-center gap-2 px-6 py-2.5 text-sm"
             >
               {isProcessing ? <ButtonLoader /> : 'Confirm Payment'}
             </button>

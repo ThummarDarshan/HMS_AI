@@ -111,12 +111,12 @@ export const Dashboard = () => {
             .filter(a => new Date(a.appointment_date) >= now)
             .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime())[0];
 
-          setStats({
-            ...stats,
+          setStats((prev) => ({
+            ...prev,
             myAppointments: appointmentsList.length,
             upcomingAppointment: upcoming || null,
             doctors: Array.isArray(doctorsList) ? doctorsList.length : 0,
-          });
+          }));
 
           setRecentAppointments(sortedAppointments.slice(0, 5));
           setDoctors(Array.isArray(doctorsList) ? doctorsList : []);
@@ -152,13 +152,13 @@ export const Dashboard = () => {
             .filter(a => new Date(a.appointment_date) >= now)
             .sort((a, b) => new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime())[0];
 
-          setStats({
-            ...stats,
+          setStats((prev) => ({
+            ...prev,
             appointmentsToday, // Today's appointments for this doctor
             totalAppointments: myAppointments.length, // Total all time
             myPatients: uniquePatients,
             upcomingAppointment: upcoming || null,
-          });
+          }));
 
           setRecentAppointments(sortedAppointments.slice(0, 5));
 
@@ -270,7 +270,9 @@ export const Dashboard = () => {
     const classes: Record<string, string> = {
       PENDING: 'bg-orange-100 text-orange-700',
       APPROVED: 'bg-emerald-100 text-emerald-700',
+      REJECTED: 'bg-rose-100 text-rose-700',
       CANCELLED: 'bg-red-100 text-red-700',
+      VISITED: 'bg-blue-100 text-blue-700',
       COMPLETED: 'bg-blue-100 text-blue-700',
     };
     return classes[status] || 'bg-gray-100 text-gray-700';
@@ -331,7 +333,7 @@ export const Dashboard = () => {
 
         <div className="grid gap-6 lg:grid-cols-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
           {/* My Appointments List */}
-          <div className="lg:col-span-2 rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="lg:col-span-2 table-container">
             <div className="p-6 border-b border-border flex items-center justify-between">
               <div>
                 <h3 className="font-semibold text-lg">My Appointments History</h3>
@@ -528,7 +530,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Recent Appointments for Doctor */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden animate-slide-up" style={{ animationDelay: '0.3s' }}>
+        <div className="table-container animate-slide-up" style={{ animationDelay: '0.3s' }}>
           <div className="p-6 border-b border-border flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-lg">My Recent Appointments</h3>
@@ -648,7 +650,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Recent Lab Requests */}
-        <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden animate-slide-up" style={{ animationDelay: '0.2s' }}>
+        <div className="table-container animate-slide-up" style={{ animationDelay: '0.2s' }}>
           <div className="p-6 border-b border-border flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-lg">Recent Lab Requests</h3>
@@ -873,38 +875,38 @@ export const Dashboard = () => {
           icon={Wallet}
           variant="green"
           trend={{ value: 10, isPositive: true }}
-            to="/billing"
-          />
-          <StatCard
-            title="Appointments Today"
-            value={stats.appointmentsToday.toLocaleString()}
-            icon={Calendar}
-            variant="purple"
-            trend={{ value: 5, isPositive: true }}
-            to="/appointments"
-          />
-          <StatCard
-            title="Total Patients"
-            value={stats.patients.toLocaleString()}
-            icon={Users}
-            variant="blue"
-            trend={{ value: 12, isPositive: true }}
-            to="/patients"
-          />
-          <StatCard
-            title="Available Beds"
-            value={`${stats.availableBeds} / ${stats.totalBeds}`}
-            icon={BedDouble}
-            variant="orange"
-            trend={{ value: 2, isPositive: false }}
-            to="/beds"
-          />
-        </div>
+          to="/billing"
+        />
+        <StatCard
+          title="Appointments Today"
+          value={stats.appointmentsToday.toLocaleString()}
+          icon={Calendar}
+          variant="purple"
+          trend={{ value: 5, isPositive: true }}
+          to="/appointments"
+        />
+        <StatCard
+          title="Total Patients"
+          value={stats.patients.toLocaleString()}
+          icon={Users}
+          variant="blue"
+          trend={{ value: 12, isPositive: true }}
+          to="/patients"
+        />
+        <StatCard
+          title="Available Beds"
+          value={`${stats.availableBeds} / ${stats.totalBeds}`}
+          icon={BedDouble}
+          variant="orange"
+          trend={{ value: 2, isPositive: false }}
+          to="/beds"
+        />
+      </div>
 
-        {/* Main Charts Section */}
-        <div className="grid gap-6 lg:grid-cols-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
-          <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
+      {/* Main Charts Section */}
+      <div className="grid gap-6 lg:grid-cols-3 animate-slide-up" style={{ animationDelay: '0.2s' }}>
+        <div className="lg:col-span-2 rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="font-semibold text-lg text-foreground">Patient Flow (Last 7 Days)</h3>
               <p className="text-sm text-muted-foreground">Daily appointment volume</p>
@@ -985,7 +987,7 @@ export const Dashboard = () => {
       <div className="grid gap-6 lg:grid-cols-3 animate-slide-up" style={{ animationDelay: '0.3s' }}>
 
         {/* Recent Appointments Table */}
-        <div className="lg:col-span-2 rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
+        <div className="lg:col-span-2 table-container">
           <div className="p-6 border-b border-border flex items-center justify-between">
             <div>
               <h3 className="font-semibold text-lg">Recent Appointments</h3>

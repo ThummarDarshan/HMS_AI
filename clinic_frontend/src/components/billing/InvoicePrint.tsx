@@ -85,57 +85,57 @@ export const InvoicePrint = () => {
             </div>
 
             {/* Fees Table */}
-            <div className="mb-8">
+            <div className="mb-8 border border-gray-300 rounded-xl overflow-hidden">
                 <table className="w-full text-left">
-                    <thead>
-                        <tr className="border-b-2 border-gray-200">
-                            <th className="py-3 text-sm font-bold text-gray-600 uppercase">Description</th>
-                            <th className="py-3 text-right text-sm font-bold text-gray-600 uppercase">Amount</th>
+                    <thead className="bg-gray-50 border-b border-gray-300">
+                        <tr>
+                            <th className="py-3 px-4 text-sm font-bold text-gray-700 uppercase">Description</th>
+                            <th className="py-3 px-4 text-right text-sm font-bold text-gray-700 uppercase">Amount</th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-gray-200 bg-white">
                         <tr>
-                            <td className="py-4 text-gray-800">Doctor Consultation Fee</td>
-                            <td className="py-4 text-right font-medium">{formatCurrency(bill.doctor_fee || 0)}</td>
+                            <td className="py-3.5 px-4 text-gray-800">Doctor Consultation Fee</td>
+                            <td className="py-3.5 px-4 text-right font-medium">{formatCurrency(bill.doctor_fee || 0)}</td>
                         </tr>
                         <tr>
-                            <td className="py-4 text-gray-800">Hospital Charge (10%)</td>
-                            <td className="py-4 text-right font-medium">{formatCurrency(bill.hospital_charge || 0)}</td>
+                            <td className="py-3.5 px-4 text-gray-800">Hospital Charge (10%)</td>
+                            <td className="py-3.5 px-4 text-right font-medium">{formatCurrency(bill.hospital_charge || 0)}</td>
                         </tr>
                         {Number(bill.bed_charge) > 0 && (
                             <tr>
-                                <td className="py-4 text-gray-800">
+                                <td className="py-3.5 px-4 text-gray-800">
                                     Bed Charges
                                     <span className="text-xs text-gray-500 block font-normal mt-1">
                                         Stay Duration: {bill.bed_days || 0} days × {formatCurrency(bill.bed_charge_per_day || 0)}/day
                                     </span>
                                 </td>
-                                <td className="py-4 text-right font-medium">{formatCurrency(bill.bed_charge)}</td>
+                                <td className="py-3.5 px-4 text-right font-medium">{formatCurrency(bill.bed_charge)}</td>
                             </tr>
                         )}
                         {Number(bill.lab_charge) > 0 && (
                             <tr>
-                                <td className="py-4 text-gray-800">Laboratory Charges</td>
-                                <td className="py-4 text-right font-medium">{formatCurrency(bill.lab_charge)}</td>
+                                <td className="py-3.5 px-4 text-gray-800">Laboratory Charges</td>
+                                <td className="py-3.5 px-4 text-right font-medium">{formatCurrency(bill.lab_charge)}</td>
                             </tr>
                         )}
 
                         {/* Summary Section within Table or separate */}
                     </tbody>
-                    <tfoot className="border-t-2 border-gray-200">
+                    <tfoot className="border-t border-gray-300 bg-gray-50">
                         <tr>
-                            <td className="py-3 text-right font-medium text-gray-600">Gross Amount</td>
-                            <td className="py-3 text-right font-bold text-gray-800">{formatCurrency(bill.total_amount)}</td>
+                            <td className="py-2.5 px-4 text-right font-medium text-gray-600">Gross Amount</td>
+                            <td className="py-2.5 px-4 text-right font-bold text-gray-800">{formatCurrency(bill.total_amount)}</td>
                         </tr>
                         {bill.discount_amount > 0 && (
                             <tr className="text-emerald-600">
-                                <td className="py-3 text-right font-medium">Discount ({bill.discount_percentage}%) {bill.case_type === 'OLD' ? '(Old Case Benefit)' : ''}</td>
-                                <td className="py-3 text-right font-bold">-{formatCurrency(bill.discount_amount)}</td>
+                                <td className="py-2.5 px-4 text-right font-medium">Discount ({bill.discount_percentage}%) {bill.case_type === 'OLD' ? '(Old Case Benefit)' : ''}</td>
+                                <td className="py-2.5 px-4 text-right font-bold">-{formatCurrency(bill.discount_amount)}</td>
                             </tr>
                         )}
-                        <tr className="text-lg">
-                            <td className="py-4 text-right font-bold text-gray-900">Total Payable</td>
-                            <td className="py-4 text-right font-extrabold text-primary">{formatCurrency(bill.final_amount ?? bill.total_amount)}</td>
+                        <tr className="text-lg bg-gray-100/70 border-t border-gray-200">
+                            <td className="py-3 px-4 text-right font-bold text-gray-900">Total Payable</td>
+                            <td className="py-3 px-4 text-right font-extrabold text-primary">{formatCurrency(bill.final_amount ?? bill.total_amount)}</td>
                         </tr>
                     </tfoot>
                 </table>

@@ -48,8 +48,8 @@
     --warning: 38 92% 50%;
     --warning-foreground: 48 96% 89%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 215 25% 82%;
+    --input: 215 25% 82%;
     --ring: 224 64% 33%;
 
     --radius: 1rem;
@@ -74,7 +74,7 @@
     --sidebar-primary-foreground: 210 40% 98%;
     --sidebar-accent: 210 40% 96.1%;
     --sidebar-accent-foreground: 224 64% 33%;
-    --sidebar-border: 214.3 31.8% 91.4%;
+    --sidebar-border: 215 25% 85%;
     --sidebar-ring: 224 64% 33%;
 
     /* Gradients */
@@ -108,8 +108,8 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 217.2 32.6% 22%;
+    --input: 217.2 32.6% 22%;
     --ring: 224 64% 53%;
 
     --sidebar-background: 222.2 84% 4.9%;
@@ -118,7 +118,7 @@
     --sidebar-primary-foreground: 222.2 47% 11.2%;
     --sidebar-accent: 217.2 32.6% 17.5%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
+    --sidebar-border: 217.2 32.6% 22%;
     --sidebar-ring: 224 64% 53%;
   }
 }
@@ -139,11 +139,37 @@
     @apply bg-background text-foreground font-sans antialiased;
     font-family: 'Inter', sans-serif;
   }
+
+  /* Global Table & Outline Styling */
+  table {
+    @apply w-full border-collapse text-left;
+  }
+
+  thead tr {
+    @apply border-b border-border bg-muted/60;
+  }
+
+  th {
+    @apply border-b border-border text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  tbody tr {
+    @apply border-b border-border transition-colors;
+  }
+
+  tbody tr:last-child {
+    @apply border-b-0;
+  }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-card rounded-2xl border border-border/60 shadow-sm transition-all duration-500 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20 hover:-translate-y-1 z-10;
+    @apply bg-card rounded-2xl border border-border shadow-sm transition-all duration-300 hover:shadow-md hover:border-primary/30 z-10;
+  }
+
+  .table-card,
+  .table-container {
+    @apply rounded-2xl border border-border bg-card shadow-sm overflow-hidden ring-1 ring-border/50;
   }
 
   .gradient-primary {
@@ -182,7 +208,7 @@
   }
 
   .table-row {
-    @apply border-b border-border/40 transition-all duration-300 hover:bg-muted/40 cursor-pointer;
+    @apply border-b border-border transition-all duration-200 hover:bg-muted/40 cursor-pointer;
   }
 
   .badge {

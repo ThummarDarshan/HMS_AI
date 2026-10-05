@@ -9,6 +9,7 @@ import { PrivateRoute } from "@/components/common/PrivateRoute";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Login } from "@/components/auth/Login";
 import { Register } from "@/components/auth/Register";
+import { CompleteProfile } from "@/components/auth/CompleteProfile";
 import { ForgotPassword } from "@/components/auth/ForgotPassword";
 import { ResetPassword } from "@/components/auth/ResetPassword";
 import { Dashboard } from "@/components/dashboard/Dashboard";
@@ -174,6 +175,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/complete-profile" element={<CompleteProfile />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
 

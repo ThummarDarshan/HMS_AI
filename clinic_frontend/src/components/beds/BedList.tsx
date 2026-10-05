@@ -59,7 +59,7 @@ export const BedList = () => {
         staleTime: 0,
     });
 
-    const beds = selectedWard 
+    const beds = selectedWard
         ? allBeds?.filter((b: Bed) => b.ward === parseInt(selectedWard))
         : allBeds;
 
@@ -442,7 +442,7 @@ export const BedList = () => {
                 </div>
             )}
 
-            <div className="bg-white border rounded-xl overflow-hidden shadow-sm overflow-x-auto">
+            <div className="table-container overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b">
                         <tr>

@@ -26,7 +26,14 @@ export interface RegisterData {
   first_name: string;
   last_name: string;
   phone: string;
-  role: string;
+  role?: string;
+  date_of_birth?: string;
+  gender?: string;
+  blood_group?: string;
+  address?: string;
+  emergency_contact?: string;
+  medical_history?: string;
+  allergies?: string;
 }
 
 export interface AuthResponse {

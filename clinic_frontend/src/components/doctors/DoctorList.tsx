@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -24,7 +24,6 @@ export const DoctorList = () => {
   const navigate = useNavigate();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('ALL');
@@ -33,10 +32,6 @@ export const DoctorList = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  useEffect(() => {
-    filterDoctors();
-  }, [doctors, searchTerm, departmentFilter]);
 
   const fetchData = async () => {
     try {
@@ -58,7 +53,7 @@ export const DoctorList = () => {
     }
   };
 
-  const filterDoctors = () => {
+  const filteredDoctors = useMemo(() => {
     let filtered = [...doctors];
 
     if (searchTerm) {
@@ -74,8 +69,8 @@ export const DoctorList = () => {
       filtered = filtered.filter((doc) => doc.department === parseInt(departmentFilter));
     }
 
-    setFilteredDoctors(filtered);
-  };
+    return filtered;
+  }, [doctors, searchTerm, departmentFilter]);
 
   const canManage = user?.role === ROLES.ADMIN || user?.role === ROLES.STAFF;
 

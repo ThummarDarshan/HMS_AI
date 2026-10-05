@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -26,7 +26,6 @@ export const PatientList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [genderFilter, setGenderFilter] = useState('ALL');
@@ -38,10 +37,6 @@ export const PatientList = () => {
   useEffect(() => {
     fetchPatients();
   }, []);
-
-  useEffect(() => {
-    filterPatients();
-  }, [patients, searchTerm, genderFilter]);
 
   const fetchPatients = async () => {
     try {
@@ -59,7 +54,7 @@ export const PatientList = () => {
     }
   };
 
-  const filterPatients = () => {
+  const filteredPatients = useMemo(() => {
     let filtered = [...patients];
 
     if (searchTerm) {
@@ -76,8 +71,8 @@ export const PatientList = () => {
       filtered = filtered.filter((p) => p.gender === genderFilter);
     }
 
-    setFilteredPatients(filtered);
-  };
+    return filtered;
+  }, [patients, searchTerm, genderFilter]);
 
   const handleDelete = async () => {
     if (!selectedPatient) return;

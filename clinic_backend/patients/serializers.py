@@ -4,7 +4,7 @@ from accounts.serializers import UserSerializer
 
 
 class PatientSerializer(serializers.ModelSerializer):
-    user = serializers.IntegerField(write_only=True, required=True)
+    user = serializers.IntegerField(write_only=True, required=False)
     user_details = UserSerializer(source="user", read_only=True)
     user_name = serializers.CharField(source="user.full_name", read_only=True)
     user_email = serializers.CharField(source="user.email", read_only=True)

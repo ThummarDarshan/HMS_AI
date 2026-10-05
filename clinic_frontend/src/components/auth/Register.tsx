@@ -97,23 +97,23 @@ export const Register = () => {
       await register(formData);
       toast({
         title: 'Account Created!',
-        description: 'Welcome to Velora Care. Your account has been created successfully.',
+        description: 'Please complete your basic profile details.',
       });
-      navigate('/dashboard');
+      navigate('/complete-profile');
     } catch (error: any) {
       const errorData = error.response?.data;
       let errorMsg = 'Something went wrong. Please try again.';
-      
+
       if (errorData) {
         if (typeof errorData === 'string') {
           errorMsg = errorData;
         } else {
           const msgs = [];
           for (const [key, val] of Object.entries(errorData)) {
-            const formattedKey = key === 'non_field_errors' 
-              ? 'Error' 
+            const formattedKey = key === 'non_field_errors'
+              ? 'Error'
               : key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-              
+
             if (Array.isArray(val) && val.length > 0) {
               msgs.push(`${formattedKey}: ${val[0]}`);
             } else if (typeof val === 'string') {
@@ -352,7 +352,7 @@ export const Register = () => {
                       <ButtonLoader className="text-white" />
                     ) : (
                       <>
-                        <span className="font-bold text-white tracking-wide">Create Account</span>
+                        <span className="font-bold text-white tracking-wide">Continue to Profile</span>
                         <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
