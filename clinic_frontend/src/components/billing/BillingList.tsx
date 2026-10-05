@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -24,7 +24,6 @@ export const BillingList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [bills, setBills] = useState<Bill[]>([]);
-  const [filteredBills, setFilteredBills] = useState<Bill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -36,10 +35,6 @@ export const BillingList = () => {
   useEffect(() => {
     fetchBills();
   }, []);
-
-  useEffect(() => {
-    filterBills();
-  }, [bills, searchTerm, statusFilter]);
 
   const fetchBills = async () => {
     try {
@@ -57,7 +52,7 @@ export const BillingList = () => {
     }
   };
 
-  const filterBills = () => {
+  const filteredBills = useMemo(() => {
     let filtered = [...bills];
 
     if (searchTerm) {
@@ -73,8 +68,8 @@ export const BillingList = () => {
       filtered = filtered.filter((b) => b.payment_status === statusFilter);
     }
 
-    setFilteredBills(filtered);
-  };
+    return filtered;
+  }, [bills, searchTerm, statusFilter]);
 
   const selectedBillBalance = selectedBill
     ? Math.max(0, Number(selectedBill.final_amount ?? selectedBill.total_amount) - Number(selectedBill.paid_amount || 0))
