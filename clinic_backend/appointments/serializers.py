@@ -92,8 +92,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             "appointment_time",
             getattr(self.instance, "appointment_time", None),
         )
+        status_val = attrs.get("status", getattr(self.instance, "status", "PENDING"))
 
-        if doctor and date and time:
+        if status_val in Appointment.ACTIVE_STATUSES and doctor and date and time:
             conflict_qs = Appointment.objects.filter(
                 doctor=doctor,
                 appointment_date=date,
@@ -108,9 +109,11 @@ class AppointmentSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "appointment_time": (
-                            "This doctor already has an active appointment "
-                            "at this date and time."
-                        )
+                            "This time slot is already booked for the selected doctor."
+                        ),
+                        "non_field_errors": [
+                            "This time slot is already booked for the selected doctor."
+                        ],
                     }
                 )
 
@@ -120,7 +123,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         """Check if appointment has associated billing"""
         try:
             return hasattr(obj, "billing") and obj.billing is not None
-        except:
+        except Exception:
             return False
 
     def get_billing_status(self, obj):
@@ -128,7 +131,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         try:
             if hasattr(obj, "billing") and obj.billing:
                 return obj.billing.payment_status
-        except:
+        except Exception:
             pass
         return None
 
@@ -136,7 +139,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         """Check if appointment has associated prescription"""
         try:
             return obj.prescriptions.exists()
-        except:
+        except Exception:
             return False
 
     def get_prescription_id(self, obj):
@@ -144,7 +147,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         try:
             first = obj.prescriptions.first()
             return first.id if first else None
-        except:
+        except Exception:
             return None
 
     def get_prescription_info(self, obj):
@@ -158,5 +161,6 @@ class AppointmentSerializer(serializers.ModelSerializer):
                     "instructions": first.instructions,
                 }
             return None
-        except:
+        except Exception:
             return None
+

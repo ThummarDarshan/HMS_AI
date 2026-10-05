@@ -93,8 +93,8 @@ export const BedRequestList = () => {
     return (
         <div className="space-y-6">
             {/* Active Requests */}
-            <div className="bg-white border rounded-xl overflow-hidden shadow-sm overflow-x-auto">
-                <div className="px-6 py-4 border-b flex justify-between items-center bg-blue-50/50">
+            <div className="table-container overflow-x-auto">
+                <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-blue-50/50">
                     <h2 className="font-semibold text-lg">Pending Bed Requests</h2>
                     <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
                         {pendingRequests.length} Pending
@@ -107,7 +107,7 @@ export const BedRequestList = () => {
                     </div>
                 ) : (
                     <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b">
+                        <thead className="bg-slate-50 border-b border-border">
                             <tr>
                                 <th className="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Date</th>
                                 <th className="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Patient</th>
@@ -117,7 +117,7 @@ export const BedRequestList = () => {
                                 <th className="px-6 py-3 text-xs font-semibold uppercase text-slate-500 text-right">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y">
+                        <tbody className="divide-y divide-border">
                             {pendingRequests.map((req: BedRequest) => (
                                 <tr key={req.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4 text-sm text-slate-600">
@@ -163,13 +163,13 @@ export const BedRequestList = () => {
 
             {/* History - Collapsible or separate table */}
             {historyRequests.length > 0 && (
-                <div className="bg-white border rounded-xl overflow-hidden shadow-sm overflow-x-auto opacity-75">
-                    <div className="px-6 py-4 border-b bg-slate-50">
+                <div className="table-container overflow-x-auto opacity-90">
+                    <div className="px-6 py-4 border-b border-border bg-slate-50">
                         <h2 className="font-semibold text-md text-slate-600">Request History</h2>
                     </div>
                     {/* Simplified table for history */}
                     <table className="w-full text-left">
-                        <tbody className="divide-y">
+                        <tbody className="divide-y divide-border">
                             {historyRequests.slice(0, 5).map((req: BedRequest) => (
                                 <tr key={req.id} className="text-sm text-slate-500">
                                     <td className="px-6 py-3">{new Date(req.created_at).toLocaleDateString()}</td>

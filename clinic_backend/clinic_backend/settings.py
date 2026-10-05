@@ -1,6 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 from decouple import config
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -34,16 +35,20 @@ if not ENCRYPTION_KEY:
 # Validate ENCRYPTION_KEY is a valid Fernet key
 try:
     from cryptography.fernet import Fernet, InvalidToken
-    Fernet(ENCRYPTION_KEY.encode())
-except Exception:
+    Fernet(ENCRYPTION_KEY.encode() if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
+except Exception as e:
     raise ImproperlyConfigured(
-        "ENCRYPTION_KEY is not a valid Fernet key. "
+        f"ENCRYPTION_KEY is not a valid Fernet key: {e}. "
         "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
     )
 
 DEBUG = config("DEBUG", default=True, cast=bool)
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in config("ALLOWED_HOSTS", default="localhost,127.0.0.1,0.0.0.0").split(",")
+    if host.strip()
+]
 
 # ---------------------------------------------------------------------------
 # Application definition
@@ -60,40 +65,22 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
-    "cloudinary",
-    "cloudinary_storage",
-    # Custom apps
+    # Local apps
     "accounts",
-    "patients",
     "doctors",
+    "patients",
     "appointments",
     "records",
     "billing",
     "support",
     "beds",
     "laboratory",
+    "audit",
     "ai_assistant",
 ]
 
-# Cloudinary Configuration
-import cloudinary
-
-CLOUDINARY_STORAGE = {
-    "CLOUD_NAME": config("CLOUDINARY_CLOUD_NAME", default=""),
-    "API_KEY": config("CLOUDINARY_API_KEY", default=""),
-    "API_SECRET": config("CLOUDINARY_API_SECRET", default=""),
-}
-
-# Initialize cloudinary
-cloudinary.config(
-    cloud_name=CLOUDINARY_STORAGE["CLOUD_NAME"],
-    api_key=CLOUDINARY_STORAGE["API_KEY"],
-    api_secret=CLOUDINARY_STORAGE["API_SECRET"],
-    secure=True,
-)
-
-# Use Cloudinary for media file storage
-DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -104,6 +91,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "audit.middleware.AuditMiddleware",
 ]
 
 ROOT_URLCONF = "clinic_backend.urls"
@@ -127,7 +115,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "clinic_backend.wsgi.application"
 
 # ---------------------------------------------------------------------------
-# Database – PostgreSQL only (SQLite is not supported in production)
+# Database Configuration
 # ---------------------------------------------------------------------------
 _db_url = config(
     "DATABASE_URL",
@@ -139,18 +127,26 @@ if not _db_url:
         "Set it to a valid PostgreSQL connection string."
     )
 
-DATABASES = {
-    "default": dj_database_url.parse(
-        _db_url,
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
-}
+if "test" in sys.argv:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "test_db.sqlite3",
+        }
+    }
+else:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            _db_url,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
+    }
 
 # Enforce PostgreSQL in production
 if not DEBUG and "postgresql" not in DATABASES["default"]["ENGINE"]:
     raise ImproperlyConfigured(
-        "Only PostgreSQL is supported. "
+        "Only PostgreSQL is supported in production. "
         f"Got engine: {DATABASES['default']['ENGINE']}"
     )
 
@@ -201,10 +197,10 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # ---------------------------------------------------------------------------
-# REST Framework Configuration – with Rate Limiting
+# REST Framework Configuration – with Rate Limiting & Exception Handling
 # ---------------------------------------------------------------------------
-THROTTLE_ANON_RATE = config("THROTTLE_ANON_RATE", default="60/min")
-THROTTLE_USER_RATE = config("THROTTLE_USER_RATE", default="1000/min")
+THROTTLE_ANON_RATE = config("THROTTLE_ANON_RATE", default="60/minute")
+THROTTLE_USER_RATE = config("THROTTLE_USER_RATE", default="1000/minute")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -213,7 +209,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
-    # Rate limiting
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
@@ -222,6 +217,7 @@ REST_FRAMEWORK = {
         "anon": THROTTLE_ANON_RATE,
         "user": THROTTLE_USER_RATE,
     },
+    "EXCEPTION_HANDLER": "audit.exceptions.custom_exception_handler",
 }
 
 # ---------------------------------------------------------------------------
@@ -244,37 +240,57 @@ SIMPLE_JWT = {
 # ---------------------------------------------------------------------------
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = config(
-    "CORS_ALLOWED_ORIGINS",
-    default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000",
-).split(",")
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in config(
+        "CORS_ALLOWED_ORIGINS",
+        default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
 
 # ---------------------------------------------------------------------------
 # CSRF Settings
 # ---------------------------------------------------------------------------
-CSRF_TRUSTED_ORIGINS = config(
-    "CSRF_TRUSTED_ORIGINS",
-    default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000",
-).split(",")
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in config(
+        "CSRF_TRUSTED_ORIGINS",
+        default="http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
 # Must be False so the React frontend JS can read the cookie value
 CSRF_COOKIE_HTTPONLY = False
 
 # ---------------------------------------------------------------------------
-# Security Headers (enforced in production only)
+# Cookies & Security Headers
 # ---------------------------------------------------------------------------
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = config("SECURE_SSL_REDIRECT", default=not DEBUG, cast=bool)
+SESSION_COOKIE_SECURE = config("SESSION_COOKIE_SECURE", default=not DEBUG, cast=bool)
+CSRF_COOKIE_SECURE = config("CSRF_COOKIE_SECURE", default=not DEBUG, cast=bool)
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = config("SESSION_COOKIE_SAMESITE", default="Lax")
+CSRF_COOKIE_SAMESITE = config("CSRF_COOKIE_SAMESITE", default="Lax")
+
 if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_HTTPONLY = True
-    SECURE_HSTS_SECONDS = 31536000          # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_SECONDS = config("SECURE_HSTS_SECONDS", default=31536000, cast=int)  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = config("SECURE_HSTS_INCLUDE_SUBDOMAINS", default=True, cast=bool)
+    SECURE_HSTS_PRELOAD = config("SECURE_HSTS_PRELOAD", default=True, cast=bool)
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
+else:
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
+
+# File upload and request size limits
+DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024, cast=int)  # 10 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = config("FILE_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024, cast=int)  # 10 MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = config("DATA_UPLOAD_MAX_NUMBER_FIELDS", default=1000, cast=int)
 
 # ---------------------------------------------------------------------------
 # Email Configuration

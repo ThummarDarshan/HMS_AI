@@ -46,7 +46,7 @@ export interface CreateDoctorData {
 
 export interface NewDoctorData {
   email: string;
-  first_name: string; 
+  first_name: string;
   last_name: string;
   phone: string;
   password?: string;

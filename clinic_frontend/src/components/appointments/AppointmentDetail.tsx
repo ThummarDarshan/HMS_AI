@@ -66,8 +66,9 @@ export const AppointmentDetail = () => {
             // Refresh
             const data = await appointmentService.getById(appointment.id);
             setAppointment(data);
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to approve appointment' });
+        } catch (error: any) {
+            const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to approve appointment';
+            toast({ variant: 'destructive', title: 'Error', description: errorMsg });
         } finally {
             setIsProcessing(false);
         }
@@ -82,8 +83,9 @@ export const AppointmentDetail = () => {
             setShowCancelModal(false);
             const data = await appointmentService.getById(appointment.id);
             setAppointment(data);
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to cancel appointment' });
+        } catch (error: any) {
+            const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to cancel appointment';
+            toast({ variant: 'destructive', title: 'Error', description: errorMsg });
         } finally {
             setIsProcessing(false);
         }
@@ -98,8 +100,9 @@ export const AppointmentDetail = () => {
             setShowRejectModal(false);
             const data = await appointmentService.getById(appointment.id);
             setAppointment(data);
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Failed to reject appointment' });
+        } catch (error: any) {
+            const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to reject appointment';
+            toast({ variant: 'destructive', title: 'Error', description: errorMsg });
         } finally {
             setIsProcessing(false);
         }
@@ -109,6 +112,7 @@ export const AppointmentDetail = () => {
         const classes: Record<string, string> = {
             PENDING: 'badge-pending',
             APPROVED: 'badge-approved',
+            REJECTED: 'badge-cancelled',
             CANCELLED: 'badge-cancelled',
             VISITED: 'bg-blue-100 text-blue-800 border-blue-200',
             COMPLETED: 'badge-approved',
@@ -261,6 +265,17 @@ export const AppointmentDetail = () => {
                                         Reject Appointment
                                     </button>
                                 </>
+                            )}
+
+                            {(appointment.status === 'PENDING' || appointment.status === 'APPROVED') && (isAdmin || user?.role === ROLES.PATIENT) && (
+                                <button
+                                    onClick={() => setShowCancelModal(true)}
+                                    disabled={isProcessing}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-destructive/20 text-destructive hover:bg-destructive/5 rounded-xl transition-colors"
+                                >
+                                    <XCircle className="h-4 w-4" />
+                                    Cancel Appointment
+                                </button>
                             )}
 
                             {appointment.status === 'APPROVED' && isDoctor && (

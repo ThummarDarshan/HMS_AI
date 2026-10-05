@@ -19,22 +19,22 @@ export const PatientHistoryModal: React.FC<PatientHistoryModalProps> = ({ isOpen
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        if (isOpen && patientId) {
-            fetchHistory();
-        }
-    }, [isOpen, patientId]);
+        if (!isOpen || !patientId) return;
 
-    const fetchHistory = async () => {
-        setIsLoading(true);
-        try {
-            const data = await appointmentService.getHistory(patientId);
-            setHistory(data);
-        } catch (error) {
-            console.error('Failed to fetch history', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+        const fetchHistory = async () => {
+            setIsLoading(true);
+            try {
+                const data = await appointmentService.getHistory(patientId);
+                setHistory(data);
+            } catch (error) {
+                console.error('Failed to fetch history', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchHistory();
+    }, [isOpen, patientId]);
 
     const getStatusColor = (status: string) => {
         switch (status) {

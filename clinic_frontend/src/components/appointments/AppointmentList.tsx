@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -27,7 +27,6 @@ export const AppointmentList = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -37,7 +36,7 @@ export const AppointmentList = () => {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [historyPatient, setHistoryPatient] = useState<{id: number, name: string} | null>(null);
+  const [historyPatient, setHistoryPatient] = useState<{ id: number, name: string } | null>(null);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [activeAction, setActiveAction] = useState<string | null>(null);
@@ -45,10 +44,6 @@ export const AppointmentList = () => {
   useEffect(() => {
     fetchAppointments();
   }, []);
-
-  useEffect(() => {
-    filterAppointments();
-  }, [appointments, searchTerm, statusFilter]);
 
   const fetchAppointments = async () => {
     try {
@@ -66,7 +61,7 @@ export const AppointmentList = () => {
     }
   };
 
-  const filterAppointments = () => {
+  const filteredAppointments = useMemo(() => {
     let filtered = [...appointments];
 
     if (searchTerm) {
@@ -83,8 +78,8 @@ export const AppointmentList = () => {
       filtered = filtered.filter((apt) => apt.status === statusFilter);
     }
 
-    setFilteredAppointments(filtered);
-  };
+    return filtered;
+  }, [appointments, searchTerm, statusFilter]);
 
   const handleApprove = async (id: number) => {
     setIsProcessing(true);
@@ -96,11 +91,12 @@ export const AppointmentList = () => {
       });
       setActiveAction(null);
       fetchAppointments();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to approve appointment';
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to approve appointment',
+        description: errorMsg,
       });
     } finally {
       setIsProcessing(false);
@@ -120,11 +116,12 @@ export const AppointmentList = () => {
       setSelectedAppointment(null);
       setActiveAction(null);
       fetchAppointments();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to cancel appointment';
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to cancel appointment',
+        description: errorMsg,
       });
     } finally {
       setIsProcessing(false);
@@ -144,11 +141,12 @@ export const AppointmentList = () => {
       setSelectedAppointment(null);
       setRejectReason('');
       fetchAppointments();
-    } catch (error) {
+    } catch (error: any) {
+      const errorMsg = error?.response?.data?.error || error?.response?.data?.detail || 'Failed to reject appointment';
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to reject appointment',
+        description: errorMsg,
       });
     } finally {
       setIsProcessing(false);
@@ -218,7 +216,7 @@ export const AppointmentList = () => {
       </div>
 
       {/* Table */}
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="table-container">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -350,8 +348,8 @@ export const AppointmentList = () => {
       <PatientHistoryModal
         isOpen={showHistoryModal}
         onClose={() => {
-            setShowHistoryModal(false);
-            setHistoryPatient(null);
+          setShowHistoryModal(false);
+          setHistoryPatient(null);
         }}
         patientId={historyPatient?.id || 0}
         patientName={historyPatient?.name || ''}

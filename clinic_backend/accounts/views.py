@@ -6,16 +6,18 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
-from django.contrib.auth import authenticate
+from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from django.middleware.csrf import get_token
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
+from django.contrib.auth import authenticate, password_validation
 from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.exceptions import ValidationError, ValidationError as DjangoValidationError
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.conf import settings
 from django.utils import timezone
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.utils.decorators import method_decorator
 from datetime import timedelta
 from threading import Thread
 from .models import User, PasswordResetToken
@@ -27,8 +29,8 @@ from .serializers import (
     VerifyResetTokenSerializer,
     ResetPasswordSerializer,
 )
+from .cookie_utils import set_auth_cookie, delete_auth_cookie, clear_auth_cookie, get_refresh_from_cookie
 from .permissions import IsAdmin
-from .cookie_utils import set_auth_cookie, clear_auth_cookie, get_refresh_from_cookie
 from doctors.models import Doctor, Department
 import string
 import secrets
@@ -66,7 +68,7 @@ class CSRFGeneratorView(APIView):
     authentication_classes = []
 
     def get(self, request):
-        return Response({"message": "CSRF cookie set"}, status=status.HTTP_200_OK)
+        return Response({"csrfToken": get_token(request), "message": "CSRF cookie set"}, status=status.HTTP_200_OK)
 
 
 # ---------------------------------------------------------------------------
@@ -81,31 +83,22 @@ class LogoutView(APIView):
     from the JSON body as a fallback.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def post(self, request):
         # Try cookie first, then body fallback
         refresh_token_str = get_refresh_from_cookie(request) or request.data.get("refresh")
 
-        if not refresh_token_str:
-            return Response(
-                {"error": "Refresh token not provided"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            token = RefreshToken(refresh_token_str)
-            token.blacklist()
-        except TokenError as e:
-            return Response(
-                {"error": "Invalid or already revoked token"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         response = Response(
             {"message": "Logged out successfully"},
             status=status.HTTP_200_OK,
         )
+        if refresh_token_str:
+            try:
+                token = RefreshToken(refresh_token_str)
+                token.blacklist()
+            except Exception:
+                pass
         clear_auth_cookie(response)
         return response
 
@@ -125,7 +118,7 @@ class CookieTokenRefreshView(APIView):
     authentication_classes = []
 
     def post(self, request):
-        refresh_token_str = get_refresh_from_cookie(request)
+        refresh_token_str = get_refresh_from_cookie(request) or request.data.get("refresh")
 
         if not refresh_token_str:
             return Response(
@@ -214,14 +207,12 @@ class UserViewSet(viewsets.ModelViewSet):
                     "message": "User registered successfully",
                     "user": UserSerializer(user).data,
                     "tokens": {
-                        # Only the short-lived access token is in the body
                         "access": str(refresh.access_token),
                     },
                 },
                 status=status.HTTP_201_CREATED,
             )
-            # Refresh token goes into an HttpOnly cookie
-            set_auth_cookie(response, str(refresh))
+            set_auth_cookie(response, refresh)
             return response
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -253,13 +244,12 @@ class UserViewSet(viewsets.ModelViewSet):
                             "message": "Login successful",
                             "user": UserSerializer(user).data,
                             "tokens": {
-                                # Only access token in JSON – refresh goes to cookie
                                 "access": str(refresh.access_token),
                             },
                         },
                         status=status.HTTP_200_OK,
                     )
-                    set_auth_cookie(response, str(refresh))
+                    set_auth_cookie(response, refresh)
                     return response
                 else:
                     return Response(
@@ -350,7 +340,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 },
                 status=status.HTTP_200_OK,
             )
-            set_auth_cookie(response, str(refresh))
+            set_auth_cookie(response, refresh)
             return response
 
         except Exception as e:
@@ -376,7 +366,13 @@ class UserViewSet(viewsets.ModelViewSet):
                 {"error": "Password is required"}, status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Use Django's built-in password validators (min length 10, common, numeric)
+        if len(password) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters long"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Use Django's built-in password validators (min length 8, common, numeric)
         try:
             validate_password(password)
         except DjangoValidationError as e:
@@ -593,3 +589,4 @@ Hospital Management System
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+

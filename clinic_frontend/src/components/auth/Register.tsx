@@ -76,8 +76,8 @@ export const Register = () => {
     }
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+    } else if (formData.password.length < 10) {
+      newErrors.password = 'Password must be at least 10 characters';
     }
     if (!formData.confirm_password) {
       newErrors.confirm_password = 'Please confirm your password';
@@ -97,14 +97,38 @@ export const Register = () => {
       await register(formData);
       toast({
         title: 'Account Created!',
-        description: 'Welcome to Velora Care. Your account has been created successfully.',
+        description: 'Please complete your basic profile details.',
       });
-      navigate('/dashboard');
+      navigate('/complete-profile');
     } catch (error: any) {
+      const errorData = error.response?.data;
+      let errorMsg = 'Something went wrong. Please try again.';
+
+      if (errorData) {
+        if (typeof errorData === 'string') {
+          errorMsg = errorData;
+        } else {
+          const msgs = [];
+          for (const [key, val] of Object.entries(errorData)) {
+            const formattedKey = key === 'non_field_errors'
+              ? 'Error'
+              : key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+
+            if (Array.isArray(val) && val.length > 0) {
+              msgs.push(`${formattedKey}: ${val[0]}`);
+            } else if (typeof val === 'string') {
+              msgs.push(`${formattedKey}: ${val}`);
+            }
+          }
+          if (msgs.length > 0) errorMsg = msgs.join(' | ');
+          else if (errorData.message) errorMsg = errorData.message;
+        }
+      }
+
       toast({
         variant: 'destructive',
         title: 'Registration Failed',
-        description: error.response?.data?.message || 'Something went wrong. Please try again.',
+        description: errorMsg,
       });
     } finally {
       setIsLoading(false);
@@ -260,15 +284,6 @@ export const Register = () => {
                 {errors.phone && <p className="text-xs text-destructive font-medium ml-1">{errors.phone}</p>}
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Account Type</label>
-                <div className="relative">
-                  <div className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 sm:py-3 text-muted-foreground text-sm font-medium shadow-sm">
-                    Patient
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground ml-1">Password</label>
@@ -337,7 +352,7 @@ export const Register = () => {
                       <ButtonLoader className="text-white" />
                     ) : (
                       <>
-                        <span className="font-bold text-white tracking-wide">Create Account</span>
+                        <span className="font-bold text-white tracking-wide">Continue to Profile</span>
                         <ArrowRight className="w-4 h-4 text-white group-hover:translate-x-1 transition-transform" />
                       </>
                     )}
