@@ -16,7 +16,11 @@ from ai_assistant.retrieval.search import MedicationRetrievalEngine
 from ai_assistant.safety.emergency_detector import EmergencyDetector
 from ai_assistant.safety.allergy_checker import AllergyChecker
 from ai_assistant.safety.prescription_guard import PrescriptionGuard
-from ai_assistant.safety.clarification_engine import ClinicalStateEngine
+from ai_assistant.safety.clarification_engine import (
+    ClinicalStateEngine,
+    get_patient_age,
+    get_patient_active_meds,
+)
 from ai_assistant.llm.provider import get_llm_provider
 from ai_assistant.ingestion.pipeline import MedicationIngestionPipeline
 
@@ -109,88 +113,80 @@ class PatientChatAPIView(APIView):
                 "informationComplete": False,
             })
 
-        # 4. Check if it's a Pure Informational Monograph Query (e.g. 'What is paracetamol used for?')
-        is_pure_info = ClinicalStateEngine.is_pure_monograph_query(message_text)
-        is_prescription_req = PrescriptionGuard.is_prescription_request(message_text)
+        # 4. Multi-Turn Consultation & Clinical Triage via LLM
+        # Collect full conversation text to ensure retrieval captures all symptoms across turns
+        all_conversation_text = " ".join([m.content for m in past_messages] + [message_text])
 
-        # 5. Step 2: Clinical State & Clarification Questioning
-        if not is_pure_info:
-            clinical_state = ClinicalStateEngine.evaluate_clinical_state(
-                current_message=message_text,
-                chat_history=past_messages,
-                patient=patient,
-            )
-
-            # If we do not have enough symptom context yet, ask dynamic clarification questions
-            if not clinical_state.get("informationComplete", False):
-                clarification_answer = ClinicalStateEngine.generate_clarification_response(
-                    state=clinical_state,
-                    user_message=message_text,
-                )
-
-                assistant_msg = ChatMessage.objects.create(
-                    session=session,
-                    role="assistant",
-                    content=clarification_answer,
-                    intent="SYMPTOM_CLARIFICATION",
-                    symptoms=clinical_state.get("detectedProtocols", []),
-                    doctor_review_required=True,
-                    is_emergency=False,
-                )
-                session.save()
-
-                return Response({
-                    "success": True,
-                    "session_id": str(session.id),
-                    "intent": "SYMPTOM_CLARIFICATION",
-                    "answer": clarification_answer,
-                    "symptoms": clinical_state.get("detectedProtocols", []),
-                    "medications": [],
-                    "sources": [],
-                    "redFlags": [],
-                    "allergyConflicts": [],
-                    "doctorReviewRequired": True,
-                    "emergency": False,
-                    "informationComplete": False,
-                })
-
-        # 6. Step 3: Grounded Document Retrieval
-        retrieved = MedicationRetrievalEngine.retrieve(message_text)
+        # Step 2: Grounded Document Retrieval across full conversation context
+        retrieved = MedicationRetrievalEngine.retrieve(all_conversation_text)
         medications_data = retrieved.get("medications", [])
         sources = retrieved.get("sources", [])
         symptoms = retrieved.get("symptoms", [])
-        intent = "PRESCRIPTION_REQUEST" if is_prescription_req else ("MEDICATION_INFORMATION" if is_pure_info else "SYMPTOM_ASSESSMENT")
 
-        # 7. Step 4: Patient Profile Allergy Conflict Check
+        # Step 3: Patient Profile Allergy Conflict Check
         med_names_to_check = [m["name"] for m in medications_data] + [m.get("generic_name", "") for m in medications_data]
         allergy_conflicts = AllergyChecker.check_patient_allergies(patient, med_names_to_check)
 
-        # 8. Step 5: LLM / Grounded Synthesis
+        # Step 4: Patient Clinical Profile Context
+        full_name = getattr(user, "full_name", None) or f"{getattr(user, 'first_name', '')} {getattr(user, 'last_name', '')}".strip() or getattr(user, "email", "Patient")
         patient_ctx = {
-            "full_name": user.full_name if hasattr(user, "full_name") else user.username,
-            "allergies": patient.allergies or "",
-            "medical_history": patient.medical_history or "",
+            "full_name": full_name,
+            "age": get_patient_age(patient),
+            "allergies": getattr(patient, "allergies", "") or "",
+            "medical_history": getattr(patient, "medical_history", "") or "",
+            "current_medications": get_patient_active_meds(patient),
         }
 
+        # Step 5: Format Chat History for Multi-Turn Reasoning
+        history_list = [
+            {"role": m.role, "content": m.content}
+            for m in past_messages
+        ]
+
+        # Step 6: Generate Intelligent Clinical Response via Gemini
         llm = get_llm_provider()
         answer = llm.generate_chat_response(
             user_message=message_text,
             retrieved_context=retrieved,
             patient_context=patient_ctx,
+            chat_history=history_list,
         )
 
-        if is_prescription_req:
-            disclaimer = PrescriptionGuard.get_anti_prescription_disclaimer()
-            answer = f"{disclaimer}\n\n{answer}"
+        # Step 7: Classify Response State
+        is_critical = bool(
+            "CRITICAL" in answer.upper()
+            or "URGENT MEDICAL ATTENTION" in answer.upper()
+        )
+        is_clarification = bool(
+            not is_critical
+            and "?" in answer
+            and (
+                "how many" in answer.lower()
+                or "how long" in answer.lower()
+                or "temperature" in answer.lower()
+                or "what is your" in answer.lower()
+                or "where is" in answer.lower()
+            )
+        )
 
-        # 9. Store Assistant Response in Session History
+        if is_critical:
+            intent = "CRITICAL_ALERT"
+        elif is_clarification:
+            intent = "SYMPTOM_CLARIFICATION"
+        else:
+            intent = "MEDICATION_GUIDANCE"
+
+        # Show medication cards if safe OTC guidance is provided
+        show_medications = medications_data if (not is_critical and not is_clarification) else []
+
+        # Step 8: Store Assistant Response in Session History
         assistant_msg = ChatMessage.objects.create(
             session=session,
             role="assistant",
             content=answer,
             intent=intent,
             symptoms=symptoms,
-            medications_data=medications_data,
+            medications_data=show_medications,
             sources=sources,
             red_flags=[],
             doctor_review_required=True,
@@ -204,13 +200,14 @@ class PatientChatAPIView(APIView):
             "intent": intent,
             "answer": answer,
             "symptoms": symptoms,
-            "medications": medications_data,
+            "medications": show_medications,
             "sources": sources,
             "redFlags": [],
             "allergyConflicts": allergy_conflicts,
             "doctorReviewRequired": True,
             "emergency": False,
-            "informationComplete": True,
+            "isCritical": is_critical,
+            "informationComplete": not is_clarification,
         })
 
 

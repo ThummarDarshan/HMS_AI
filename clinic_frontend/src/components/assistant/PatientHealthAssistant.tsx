@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   RefreshCw,
   X,
+  Bot,
 } from 'lucide-react';
 import {
   aiAssistantService,
@@ -123,7 +124,7 @@ export const PatientHealthAssistant: React.FC = () => {
       console.error('Chat error:', err);
       const errMsg =
         err?.response?.data?.error ||
-        'Unable to retrieve medication information. Please try again.';
+        'Unable to retrieve response. Please try again.';
       setError(errMsg);
       toast.error(errMsg);
     } finally {
@@ -138,41 +139,48 @@ export const PatientHealthAssistant: React.FC = () => {
   };
 
   return (
-    <div className="relative flex flex-col h-[calc(100vh-6.8rem)] rounded-3xl border border-border bg-card/60 backdrop-blur-xl shadow-xl overflow-hidden animate-fade-in">
-      {/* Assistant Header */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-card/90 backdrop-blur-md flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-primary to-secondary text-white shadow-md shadow-primary/20">
-            <Sparkles className="h-5 w-5" />
+    <div className="relative flex flex-col h-[calc(100vh-6.8rem)] rounded-3xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/70 backdrop-blur-xl shadow-xl overflow-hidden animate-fade-in">
+      {/* Assistant Header with Strong Visual Hierarchy */}
+      <div className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md flex-shrink-0 z-10 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="relative">
+            <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20">
+              <Bot className="h-5 w-5" />
+            </div>
+            {/* Pulsing online status indicator */}
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
           </div>
+
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-foreground">AI Health Assistant</h2>
-              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <ShieldCheck className="h-3 w-3" /> CDSCO / DailyMed Verified
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+                Velora AI Health Assistant
+              </h2>
+              <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                <ShieldCheck className="h-3 w-3" /> CDSCO & DailyMed Verified
               </span>
             </div>
-            <p className="text-[11px] sm:text-xs text-muted-foreground">
-              Official medication documentation & symptom understanding
+            <p className="text-xs text-muted-foreground">
+              Clinical triage, symptom intake, and verified medication guidance
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           {/* Past Consultations Toggle */}
           <button
             onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border bg-card hover:bg-muted text-xs font-medium text-muted-foreground hover:text-foreground transition-colors shadow-xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-colors shadow-xs"
             title="View Past Consultations"
           >
-            <History className="h-4 w-4" />
+            <History className="h-4 w-4 text-blue-600" />
             <span className="hidden md:inline">History ({sessions.length})</span>
           </button>
 
           {/* New Chat Button */}
           <button
             onClick={handleNewChat}
-            className="btn-gradient flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl shadow-md"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 transition-all active:scale-95"
             title="Start New Chat"
           >
             <Plus className="h-4 w-4" />
@@ -183,7 +191,7 @@ export const PatientHealthAssistant: React.FC = () => {
 
       {/* Main Body */}
       <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-        {/* Chat Window Area (Takes all available remaining height and scrolls) */}
+        {/* Chat Window Area */}
         <ChatWindow
           messages={messages}
           isLoading={isLoading}
@@ -193,7 +201,7 @@ export const PatientHealthAssistant: React.FC = () => {
         />
 
         {/* Input Bar (Permanently pinned at bottom) */}
-        <div className="flex-shrink-0 p-3 sm:p-4 border-t border-border/80 bg-card/90 backdrop-blur-md">
+        <div className="flex-shrink-0 p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
           <ChatInput
             onSend={handleSendMessage}
             isLoading={isLoading}
@@ -203,10 +211,10 @@ export const PatientHealthAssistant: React.FC = () => {
 
         {/* History Slide-over Drawer */}
         {isHistoryOpen && (
-          <div className="absolute inset-y-0 right-0 z-30 w-72 sm:w-80 border-l border-border bg-card/95 backdrop-blur-2xl shadow-2xl p-4 flex flex-col animate-slide-left">
+          <div className="absolute inset-y-0 right-0 z-30 w-72 sm:w-80 border-l border-slate-200 dark:border-slate-800 bg-white/98 dark:bg-slate-900/98 backdrop-blur-2xl shadow-2xl p-4 flex flex-col animate-slide-left">
             <div className="flex items-center justify-between pb-3 border-b border-border flex-shrink-0">
               <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
-                <History className="h-4 w-4 text-primary" /> Past Consultations
+                <History className="h-4 w-4 text-blue-600" /> Past Consultations
               </h3>
               <button
                 onClick={() => setIsHistoryOpen(false)}
@@ -232,12 +240,12 @@ export const PatientHealthAssistant: React.FC = () => {
                     onClick={() => handleSelectSession(s)}
                     className={`group relative flex items-start justify-between p-3 rounded-xl border transition-all cursor-pointer ${
                       currentSessionId === s.id
-                        ? 'border-primary/50 bg-primary/10 shadow-xs'
-                        : 'border-border/60 bg-card hover:bg-muted/50'
+                        ? 'border-blue-600/50 bg-blue-50 dark:bg-blue-950/30 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60'
                     }`}
                   >
                     <div className="flex items-start gap-2.5 overflow-hidden">
-                      <MessageSquare className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                      <MessageSquare className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       <div className="overflow-hidden">
                         <p className="text-xs font-semibold text-foreground truncate">
                           {s.title || 'Consultation'}
