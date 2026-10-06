@@ -290,7 +290,7 @@ export const Dashboard = () => {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/ai-assistant')}
+              onClick={() => window.open('/ai-assistant', '_blank')}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all shadow-sm"
             >
               <Sparkles className="h-4 w-4" />

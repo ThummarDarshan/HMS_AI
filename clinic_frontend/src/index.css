@@ -328,6 +328,149 @@
   box-shadow: 0 0 30px -5px var(--tw-shadow-color);
 }
 
+/* ============================================================
+   Soft Medical Aurora Theme (Scoped specifically for Chatbot)
+   Lavender → Ice Blue → Soft White with Blue Medical Accents
+   ============================================================ */
+.aurora-bg-mesh {
+  background-color: #F8FAFD;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(237, 233, 254, 0.75) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(224, 242, 254, 0.85) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(240, 249, 255, 0.5) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(238, 242, 255, 0.65) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(245, 243, 255, 0.65) 0px, transparent 50%);
+}
+
+.dark .aurora-bg-mesh {
+  background-color: #0A0F1D;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(30, 27, 75, 0.5) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(12, 74, 110, 0.45) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(15, 23, 42, 0.7) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(30, 58, 138, 0.35) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(19, 24, 44, 0.65) 0px, transparent 50%);
+}
+
+.aurora-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid #D9E2F0;
+  box-shadow: 0 10px 30px -5px rgba(30, 58, 138, 0.05), 0 4px 16px -2px rgba(56, 189, 248, 0.04);
+}
+
+.dark .aurora-card {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(51, 65, 85, 0.7);
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.35);
+}
+
+.aurora-btn-gradient {
+  background: linear-gradient(135deg, #2563EB 0%, #1E3A8A 100%);
+  color: #FFFFFF;
+  box-shadow: 0 6px 20px -2px rgba(37, 99, 235, 0.3);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.aurora-btn-gradient:hover {
+  background: linear-gradient(135deg, #1D4ED8 0%, #172554 100%);
+  box-shadow: 0 8px 24px -2px rgba(37, 99, 235, 0.4);
+  transform: translateY(-1px);
+}
+
+.aurora-btn-gradient:active {
+  transform: scale(0.97);
+}
+
+.aurora-input {
+  background: rgba(240, 245, 250, 0.85);
+  border: 1px solid #D9E2F0;
+  color: #1E293B;
+  transition: all 0.2s ease-in-out;
+}
+
+.dark .aurora-input {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+  color: #F8FAFC;
+}
+
+.aurora-input:focus-within {
+  border-color: #2563EB;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+}
+
+.dark .aurora-input:focus-within {
+  border-color: #38BDF8;
+  background: rgba(15, 23, 42, 0.95);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+}
+
+/* Custom sleek scrollbar & hide ugly browser scrollbars */
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.6);
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.6);
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
+}
+
+/* Ambient animated aurora floating glow */
+@keyframes aurora-float-1 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(40px, -30px) scale(1.1);
+  }
+}
+
+@keyframes aurora-float-2 {
+  0%, 100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  50% {
+    transform: translate(-35px, 25px) scale(1.08);
+  }
+}
+
+.aurora-orb-1 {
+  animation: aurora-float-1 18s ease-in-out infinite;
+}
+.aurora-orb-2 {
+  animation: aurora-float-2 22s ease-in-out infinite;
+}
+
+
 @media print {
   @page {
     margin: 20mm;
@@ -384,3 +527,68 @@
     overflow: visible !important;
   }
 }
+
+/* Soft Medical Aurora Design System & Landing Page Utilities */
+.aurora-card {
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid #D9E2F0;
+  box-shadow: 0 14px 40px -12px rgba(37, 99, 235, 0.08), 0 4px 16px -4px rgba(15, 23, 42, 0.04);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark .aurora-card {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+  box-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.6);
+}
+
+.aurora-card:hover {
+  border-color: #BAE6FD;
+  box-shadow: 0 20px 48px -12px rgba(37, 99, 235, 0.14), 0 8px 24px -4px rgba(15, 23, 42, 0.06);
+}
+
+.dark .aurora-card:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 20px 48px -12px rgba(56, 189, 248, 0.12);
+}
+
+.aurora-glow-subtle {
+  background: radial-gradient(circle at 50% 50%, rgba(224, 242, 254, 0.8) 0%, rgba(237, 233, 254, 0.4) 40%, transparent 70%);
+}
+
+.dark .aurora-glow-subtle {
+  background: radial-gradient(circle at 50% 50%, rgba(30, 58, 138, 0.25) 0%, rgba(15, 23, 42, 0.5) 50%, transparent 80%);
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+@keyframes floatSmooth {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.animate-float-smooth {
+  animation: floatSmooth 5s ease-in-out infinite;
+}
+

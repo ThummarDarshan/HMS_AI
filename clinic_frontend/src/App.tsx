@@ -183,9 +183,12 @@ const App = () => (
             <Route element={<PrivateRoute><DashboardLayout title="Dashboard" /></PrivateRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
             </Route>
-            <Route element={<PrivateRoute allowedRoles={['PATIENT', 'ADMIN', 'DOCTOR']}><DashboardLayout title="AI Health Assistant" /></PrivateRoute>}>
-              <Route path="/ai-assistant" element={<PatientHealthAssistant />} />
-            </Route>
+            {/* Standalone Route - Chat Bot only */}
+            <Route path="/ai-assistant" element={
+              <PrivateRoute allowedRoles={['PATIENT', 'ADMIN', 'DOCTOR']}>
+                <PatientHealthAssistant />
+              </PrivateRoute>
+            } />
             <Route element={<PrivateRoute><DashboardLayout title="My Profile" /></PrivateRoute>}>
               <Route path="/profile" element={<Profile />} />
             </Route>

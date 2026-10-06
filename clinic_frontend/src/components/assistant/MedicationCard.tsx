@@ -12,27 +12,27 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication }) =>
   const sections = medication.sections || {};
 
   return (
-    <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/70 p-3.5 sm:p-4 shadow-xs hover:border-blue-400/50 transition-all">
+    <div className="rounded-2xl border border-[#D9E2F0] dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md p-3.5 sm:p-4 shadow-xs hover:border-[#38BDF8] transition-all">
       <div
         onClick={() => setIsExpanded(!isExpanded)}
         className="flex items-center justify-between cursor-pointer select-none"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex-shrink-0">
+          <div className="p-2.5 rounded-xl bg-[#E0F2FE] dark:bg-sky-950/60 text-[#2563EB] dark:text-[#38BDF8] flex-shrink-0">
             <Pill className="h-5 w-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+              <h4 className="font-bold text-sm sm:text-base text-[#1E3A8A] dark:text-white">
                 {medication.name}
               </h4>
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+              <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-[#E0F2FE] text-[#0284C7] dark:bg-sky-950/50 dark:text-sky-300 border border-[#BAE6FD] dark:border-sky-800">
                 Official Monograph
               </span>
             </div>
             {medication.brand_names && medication.brand_names.length > 0 && (
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Common Indian brands: <span className="font-medium text-foreground">{medication.brand_names.slice(0, 4).join(', ')}</span>
+              <p className="text-xs text-[#64748B] dark:text-slate-400 mt-0.5">
+                Common Indian brands: <span className="font-medium text-[#1E293B] dark:text-slate-200">{medication.brand_names.slice(0, 4).join(', ')}</span>
               </p>
             )}
           </div>
@@ -40,7 +40,7 @@ export const MedicationCard: React.FC<MedicationCardProps> = ({ medication }) =>
 
         <button
           type="button"
-          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold text-[#1E3A8A] dark:text-sky-300 hover:bg-[#F0F5FA] dark:hover:bg-slate-800 transition-colors"
           aria-label={isExpanded ? 'Collapse monograph' : 'Expand monograph'}
         >
           <span className="hidden sm:inline">{isExpanded ? 'Hide' : 'View details'}</span>

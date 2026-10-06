@@ -49,11 +49,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading, onQuick
   };
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-3">
-      {/* Quick Suggestion Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 flex-shrink-0 mr-1">
-          <Sparkles className="h-3 w-3 text-blue-600" /> Prompts:
+    <div className="max-w-4xl mx-auto w-full space-y-2.5">
+      {/* Quick Suggestion Chips with Soft Aurora Styling (Guaranteed Zero Scrollbar) */}
+      <div
+        className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none no-scrollbar select-none"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        <span className="text-[11px] font-bold text-[#1E3A8A] dark:text-[#38BDF8] uppercase tracking-wider flex items-center gap-1 flex-shrink-0 mr-1">
+          <Sparkles className="h-3 w-3 text-[#2563EB]" /> Prompts:
         </span>
         {QUICK_PROMPTS.map((prompt, idx) => (
           <button
@@ -64,17 +67,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading, onQuick
               if (onQuickPrompt) onQuickPrompt(prompt);
               else onSend(prompt);
             }}
-            className="flex-shrink-0 text-xs px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-foreground transition-all shadow-xs disabled:opacity-50"
+            className="flex-shrink-0 text-xs px-3.5 py-1.5 rounded-full border border-[#D9E2F0] dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 hover:border-[#38BDF8] hover:bg-[#F0F7FF] dark:hover:bg-slate-800 text-[#1E3A8A] dark:text-slate-200 transition-all shadow-xs hover:shadow-sm disabled:opacity-50 font-medium active:scale-95"
           >
             {prompt}
           </button>
         ))}
       </div>
 
-      {/* Input Box Card */}
+      {/* Floating Input Box Card */}
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-end gap-2 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2.5 shadow-md focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all"
+        className="relative flex items-end gap-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-[#D9E2F0] dark:border-slate-800 p-2.5 sm:p-3 shadow-[0_12px_36px_-6px_rgba(30,58,138,0.09)] focus-within:border-[#2563EB] focus-within:ring-2 focus-within:ring-[#38BDF8]/20 transition-all"
       >
         <textarea
           ref={textareaRef}
@@ -85,18 +88,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({ onSend, isLoading, onQuick
           disabled={isLoading}
           rows={1}
           maxLength={2000}
-          className="flex-1 max-h-[140px] resize-none bg-transparent px-3 py-1.5 text-sm sm:text-base text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 leading-relaxed"
+          className="flex-1 max-h-[140px] resize-none bg-transparent px-3 py-1 text-sm sm:text-base text-[#1E293B] dark:text-slate-100 placeholder:text-[#94A3B8] focus:outline-none disabled:opacity-50 leading-relaxed custom-scrollbar"
         />
 
-        <div className="flex items-center gap-2 flex-shrink-0 pb-1 pr-1">
-          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+        <div className="flex items-center gap-2 flex-shrink-0 pb-0.5 pr-1">
+          <span className="text-[10px] text-[#94A3B8] hidden sm:inline">
             {text.length}/2000
           </span>
 
           <button
             type="submit"
             disabled={!text.trim() || isLoading}
-            className="p-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md shadow-blue-500/20 disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 flex items-center justify-center"
+            className="p-2.5 rounded-xl aurora-btn-gradient disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 flex items-center justify-center shadow-md shadow-[#2563EB]/25"
             title="Send message (Enter)"
           >
             <Send className="h-4 w-4" />

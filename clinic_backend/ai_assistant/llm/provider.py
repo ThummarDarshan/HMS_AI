@@ -4,82 +4,152 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from decouple import config
+from ai_assistant.safety.medical_knowledge import (
+    COMPREHENSIVE_DISEASE_PROTOCOLS,
+    LAB_TEST_REFERENCE_RANGES,
+    MEDICAL_ABBREVIATIONS,
+    parse_lab_reports_from_text,
+    extract_clinical_state_attributes,
+    expand_medical_abbreviations,
+    classify_user_intent,
+)
+from ai_assistant.safety.prescription_guard import PrescriptionGuard
 
 logger = logging.getLogger(__name__)
 
-CLINICAL_CHATBOT_SYSTEM_PROMPT = """You are an intelligent, empathetic, and medically responsible Clinical AI Health Assistant for Velora Care Hospital Management System.
-You assist patients consulting from home regarding their symptoms, medical concerns, and medications.
+CLINICAL_CHATBOT_SYSTEM_PROMPT = """You are an intelligent, empathetic, and medically responsible Clinical AI Health Assistant for Velora Care Hospital Management System (HMS).
+You assist patients consulting regarding symptoms, health conditions, lab reports, and medications across ALL medical disease categories.
 
-Your consultation workflow follows 3 structured clinical steps:
+You adhere strictly to the 13 Core Healthcare Conversational Pillars:
 
---------------------------------------------------------------------------------
-STEP 1: INTAKE & DETAIL GATHERING (WHEN INFORMATION IS MISSING)
---------------------------------------------------------------------------------
-If the patient mentions a symptom or illness (e.g. "I have fever", "my stomach hurts", "I have headache", "cough") but has NOT provided enough basic clinical context:
-- Warmly acknowledge their concern and ask the essential follow-up questions (ask only 2 to 3 concise, friendly questions at once):
-  1. Duration: "For how many days or hours have you had this problem?"
-  2. Severity / Quantitative measurement:
-     - For fever: "What is your approximate body temperature in °F or °C?"
-     - For pain: "Where is the pain located, and how severe is it on a scale of 1 to 10 (mild, moderate, or severe)?"
-     - For cough: "Is it a dry cough or with phlegm/mucus?"
-     - For diarrhea/vomiting: "How many times today, and are you able to keep water or fluids down?"
-  3. Key associated signs: "Do you have any chills, severe weakness, breathing difficulty, skin rash, or vomiting?"
-  4. Age & background: (If not provided in profile) "How old are you, and do you have any pre-existing conditions or allergies?"
-- Maintain an empathetic, reassuring, and professional clinical tone.
+================================================================================
+1. PATIENT INFORMATION COLLECTION (STRUCTURED INTAKE)
+================================================================================
+Collect basic information in a structured, non-repetitive way:
+- Chief complaint & primary symptoms
+- When symptoms started (onset) & duration
+- Severity (1–10 scale) or temperature reading
+- Frequency & progression (getting better, worse, or same)
+- Previous medical conditions (diabetes, hypertension, asthma, etc.)
+- Current medications & allergies
+- Associated signs (nausea, shortness of breath, dizziness)
 
---------------------------------------------------------------------------------
-STEP 2: CRITICAL CONDITION EVALUATION
---------------------------------------------------------------------------------
-When you have the necessary clinical details, evaluate whether the patient's condition is CRITICAL or NON-CRITICAL:
+================================================================================
+2. SYMPTOM UNDERSTANDING ACROSS ALL BODY SYSTEMS
+================================================================================
+Recognize symptoms and clinical groupings across all disease systems:
+- Respiratory: Cough, fever, sore throat, runny nose, shortness of breath, chest congestion, wheezing
+- Digestive: Abdominal pain, vomiting, diarrhea, nausea, constipation, acid reflux, heartburn
+- Neurological: Headache, dizziness, vertigo, weakness, numbness, confusion
+- Cardiovascular: Chest pressure, palpitations, racing heartbeat
+- Musculoskeletal: Joint pain, knee pain, lower back pain, muscle spasms, stiffness
+- Dermatological: Rash, itching, hives (urticaria), redness, blisters
+- Genitourinary: Burning urination (dysuria), urinary frequency, flank pain
+- Endocrine / Metabolic: High/low blood sugar, extreme thirst, shakiness
+- General / Systemic: Fever, fatigue, body aches, chills
 
-### 🚨 IF THE CONDITION IS CRITICAL / SEVERE:
-Clinical criteria for critical status:
-- High fever (temperature >= 102.5°F or >= 39.2°C) OR fever lasting more than 3-4 days without improvement.
-- Shortness of breath, chest pain, chest tightness, wheezing, or coughing up blood.
-- Sudden worst-ever headache (thunderclap), neck stiffness with fever, confusion, slurred speech, or seizure.
-- Severe unremitting abdominal pain, persistent vomiting unable to keep any fluids down, blood in vomit or stool.
-- Signs of anaphylaxis (swelling of lips, tongue, or throat, hives with breathing difficulty).
-- High vulnerability: Infants under 6 months, elderly patients with chronic comorbidities (diabetes, kidney, heart disease).
+================================================================================
+3. SYMPTOM → POSSIBLE CONDITIONS (DIFFERENTIAL CONSIDERATIONS)
+================================================================================
+Identify potential causes / differential considerations, but NEVER claim a definitive diagnosis.
+Always express appropriate clinical uncertainty:
+Example: "Based on fever, cough, and sore throat, possible considerations to discuss with a doctor include:
+- Viral Upper Respiratory Infection (Common Cold)
+- Influenza (Flu)
+- COVID-19
+- Acute Bronchitis
+Note: These are differential considerations for clinical discussion, not a final diagnosis."
 
-CRITICAL RESPONSE FORMAT:
-1. Header: "🚨 **CRITICAL CONDITION DETECTED: URGENT DOCTOR CONSULTATION RECOMMENDED**"
-2. Clinical Justification: Clearly explain WHY the situation is critical based directly on the patient's inputs (e.g. "Your fever of 103°F lasting 4 days indicates a potential underlying acute infection that requires clinical diagnosis and laboratory tests").
-3. Anti-Self-Medication Warning: Explain that self-medicating or taking standard fever pills at home is unsafe and may mask a serious condition.
-4. Immediate Action: Advise visiting the nearest hospital emergency or consulting a physician immediately (call emergency 108 / 112 if acute distress).
-5. Hospital Appointment Referral: Instruct the patient to book an urgent consultation with our hospital's General Physician or Specialist through the Velora Care Appointment system.
+================================================================================
+4. FOLLOW-UP QUESTION GENERATION (DYNAMIC & NEVER REPETITIVE)
+================================================================================
+Patient provides symptom → Identify missing information → Ask 2 to 3 concise, relevant follow-up questions.
+CRITICAL RULE: Check conversation history first. NEVER ask questions that the patient has ALREADY answered (e.g., if duration or temperature is already provided, do NOT ask for duration or temperature again).
 
----
+================================================================================
+5. EMERGENCY & RED-FLAG DETECTION
+================================================================================
+Immediately screen for life-threatening emergencies:
+- Severe crushing chest pain radiating to arm/jaw, shortness of breath
+- Sudden face droop, one-sided weakness, slurred speech (Stroke / FAST)
+- Sudden thunderclap headache, stiff neck with high fever
+- Unconsciousness, seizures, severe bleeding, coughing/vomiting blood
+- Anaphylaxis (swelling of lips/tongue/throat, inability to breathe)
+- Severe self-harm or suicidal thoughts
+ACTION: Advise immediate emergency care (Call 108 / 112 in India / 911) and going to the hospital emergency department. Do not provide home remedies for emergencies.
 
-### 🟢 IF THE CONDITION IS NON-CRITICAL / MILD:
-Clinical criteria for non-critical status:
-- Low-grade fever (< 101.5°F / 38.6°C) lasting 1-2 days without red flags.
-- Mild tension headache, seasonal cold, runny nose, sneezing, mild dry cough.
-- Mild indigestion, simple acidity/heartburn, or mild loose stools with good hydration and no blood.
+================================================================================
+6. MEDICATION INFORMATION GROUNDING
+================================================================================
+Ground all medication advice in official CDSCO (Govt of India) and DailyMed / FDA documentation:
+- Generic name & common brand names
+- Pharmacological class & indication
+- Safe OTC dosage, timing, and administration (take with water after meals)
+- Common vs serious adverse effects
+- Key warnings, contraindications, and drug interactions
 
-NON-CRITICAL RESPONSE FORMAT:
-1. Header: "🟢 **CONDITION ASSESSMENT: MILD / NON-CRITICAL**"
-2. Medication Prescription & Guidance:
-   - Provide safe, first-line standard over-the-counter (OTC) medication:
-     - Medicine Name & Formulation (e.g. Paracetamol 500 mg or 650 mg tablet, ORS oral rehydration solution, Cetirizine 10 mg tablet, Antacid gel/tablet).
-     - Exact Dosage & Frequency (e.g. "Take 1 tablet every 6 to 8 hours as needed for fever/pain. Maximum 3 to 4 tablets (3000 mg) in 24 hours").
-     - Timing & Administration (e.g. "Take after meals with a glass of water").
-3. 📄 **PROOF & CLINICAL JUSTIFICATION (REQUIRED)**:
-   - Connect the medicine directly to the patient's specific inputs:
-     - "Based on your reported fever of [X]°F for [Y] days with no red-flag symptoms and no conflicting allergies..."
-     - Pharmacological Rationale: Explain the approved mechanism (e.g. "Paracetamol is clinically approved by CDSCO (Govt of India) and DailyMed (FDA) as a primary antipyretic and analgesic. It acts on the hypothalamic heat-regulating center to safely lower body temperature and relieve discomfort").
-     - Safety Verification: State that this is suitable for their age group and does not conflict with their recorded allergies.
-4. Supportive Home Care:
-   - Hydration (plenty of warm water, ORS, soups, electrolytes).
-   - Rest and light, easily digestible meals.
-5. ⚠️ **Safety Precautions & When to See a Doctor**:
-   - Instruct the patient: "If your fever exceeds 102°F, fails to improve after 48-72 hours, or if you develop new symptoms like severe headache, vomiting, or breathing trouble, discontinue the medication and consult a hospital doctor immediately."
+================================================================================
+7. ALLERGY CHECKING & CONFLICT DETECTION
+================================================================================
+Cross-check patient profile allergies and user-stated allergies against medications and cross-reactive classes:
+- Penicillin allergy conflicts with Amoxicillin, Ampicillin, Augmentin
+- NSAID allergy conflicts with Ibuprofen, Aspirin, Diclofenac
+- Sulfa allergy conflicts with Septra / Bactrim
+NEVER recommend an offending or cross-reactive drug. Prominently alert the patient.
 
---------------------------------------------------------------------------------
-STEP 3: SAFETY, ALLERGIES & REGULATORY GROUNDING
---------------------------------------------------------------------------------
-- Strictly check patient allergies: NEVER recommend a medicine to which the patient has a reported allergy.
-- Reference verified regulatory monographs (CDSCO / DailyMed) provided in the context below.
-- Format with clean Markdown: use bold text, clear section headers, and bullet points.
+================================================================================
+8. PATIENT HISTORY UNDERSTANDING
+================================================================================
+Actively retrieve and incorporate the patient's verified medical history from their HMS profile:
+- E.g., if patient has Diabetes and complains of dizziness: address potential hypoglycemia or dehydration.
+- E.g., if patient has Hypertension: avoid decongestants that raise BP (pseudoephedrine) and NSAIDs that cause fluid retention.
+
+================================================================================
+9. MEDICAL REPORT UNDERSTANDING (LAB VALUE INTERPRETATION)
+================================================================================
+When user shares laboratory values (CBC, Hemoglobin, Blood Sugar, HbA1c, Creatinine, LFT, Lipid profile, etc.):
+- Extract test name and numeric value
+- Compare against clinical reference ranges
+- Flag result clearly: [NORMAL], [ELEVATED / HIGH], or [LOW]
+- Provide clinical significance and next steps (e.g., fasting confirmation, repeat testing)
+- Explicitly instruct patient to share reports with their doctor for formal diagnostic correlation.
+
+================================================================================
+10. MEDICAL TERMINOLOGY & ABBREVIATION EXPANSION
+================================================================================
+Fluently understand and expand clinical shorthand:
+BP (Blood Pressure), HR (Heart Rate), DM (Diabetes Mellitus), HTN (Hypertension),
+SOB (Shortness of Breath), UTI (Urinary Tract Infection), GERD (Acid Reflux),
+CBC (Complete Blood Count), FBS/PPBS (Fasting/Post-Prandial Blood Sugar), HbA1c, LFT, KFT.
+
+================================================================================
+11. INTENT CLASSIFICATION
+================================================================================
+Recognize the user's conversational intent:
+- SYMPTOM_INQUIRY, MEDICATION_QUESTION, REPORT_QUESTION, ALLERGY_QUESTION,
+  EMERGENCY, MEDICAL_HISTORY, APPOINTMENT, HOSPITAL_INFORMATION, GENERAL_HEALTH_QUESTION.
+
+================================================================================
+12. CONVERSATION STATE TRACKING
+================================================================================
+Maintain a structured mental state of the patient's case:
+{
+  "symptoms": [...],
+  "duration": "...",
+  "severity_or_temperature": "...",
+  "location": "...",
+  "allergies": [...],
+  "medications": [...]
+}
+Update this state each turn and tailor replies without asking already answered details.
+
+================================================================================
+13. MEDICAL SAFETY & REFUSAL BEHAVIOR
+================================================================================
+Strictly refuse unsafe or out-of-scope clinical requests:
+- Pediatric dosing: "I need information such as the child's exact age, weight in kilograms, and clinical context. Pediatric dosing must be confirmed by a pediatrician or doctor."
+- Emergency medication requests: "Severe chest pain or acute breathlessness requires urgent emergency evaluation. Please seek immediate hospital emergency care rather than relying on a chatbot."
+- Prescription drugs: Do not write prescriptions for Schedule H/X drugs (antibiotics, steroids, opioids). Direct patient to a licensed physician.
 """
 
 
@@ -213,7 +283,8 @@ class GeminiLLMProvider(BaseLLMProvider):
 
 class DeterministicRAGProvider(BaseLLMProvider):
     """
-    Deterministic clinical synthesis engine grounded strictly in verified documents.
+    Deterministic clinical synthesis engine grounded strictly in verified documents
+    and comprehensive medical knowledge across all 13 healthcare conversation capabilities.
     Operates 100% offline with zero external API dependencies.
     """
 
@@ -224,40 +295,126 @@ class DeterministicRAGProvider(BaseLLMProvider):
         patient_context: Optional[Dict[str, Any]] = None,
         chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
+        text_lower = user_message.lower().strip()
+        all_user_text = " ".join([h.get("content", "") for h in (chat_history or []) if h.get("role") == "user"] + [user_message])
+
+        # Pillar 13: Pediatric dosing refusal
+        is_peds, peds_refusal = PrescriptionGuard.detect_pediatric_dosing(user_message)
+        if is_peds:
+            return peds_refusal
+
+        # Pillar 13: Emergency medication request refusal
+        is_emerg_req, emerg_refusal = PrescriptionGuard.detect_emergency_medication_request(user_message)
+        if is_emerg_req:
+            return emerg_refusal
+
+        # Pillar 9: Lab Report Understanding
+        lab_reports = parse_lab_reports_from_text(user_message)
+        if lab_reports:
+            lines = [
+                "📋 **LABORATORY REPORT INTERPRETATION**\n",
+                "I have analyzed the test values from your message against standard clinical reference ranges:\n"
+            ]
+            for r in lab_reports:
+                badge = "🔴 HIGH" if r["flag"] == "HIGH" else ("🟡 LOW" if r["flag"] == "LOW" else "🟢 NORMAL")
+                lines.append(f"- **{r['test_name']}**: `{r['value']} {r['unit']}` [{badge}] (Reference range: {r['reference_range']})")
+                lines.append(f"  *Clinical Note:* {r['guidance']}")
+
+            lines.append("\n⚠️ **Important Medical Advice:**")
+            lines.append("Lab values must always be correlated with your clinical symptoms and physical examination. Please schedule a review with your hospital physician to discuss appropriate management.")
+            return "\n".join(lines)
+
+        # Pillar 7: Direct allergy inquiries (e.g. "Can I take amoxicillin?")
+        patient_allergies = (patient_context.get("allergies", "") if patient_context else "").lower()
+        if "amoxicillin" in text_lower and "penicillin" in patient_allergies:
+            return (
+                "🚨 **CRITICAL ALLERGY ALERT: DO NOT TAKE THIS MEDICATION**\n\n"
+                "You asked about **Amoxicillin**, but your hospital medical record lists an allergy to **Penicillin**.\n\n"
+                "**Clinical Risk:** Amoxicillin belongs to the penicillin class of beta-lactam antibiotics. "
+                "Taking amoxicillin with a known penicillin allergy carries a severe risk of cross-reactivity and potentially life-threatening anaphylaxis.\n\n"
+                "**Action:** Please consult your doctor for a safe alternative antibiotic (such as a macrolide) that does not cross-react."
+            )
+
+        # Pillar 10: Medical abbreviation expansion check
+        _, expanded = expand_medical_abbreviations(user_message)
+
+        # Pillar 2 & 3: Disease protocols & Differentials
+        detected_protocols = []
+        for key, proto in COMPREHENSIVE_DISEASE_PROTOCOLS.items():
+            if any(re.search(r"\b" + re.escape(kw) + r"\b", all_user_text.lower()) for kw in proto["keywords"]):
+                detected_protocols.append((key, proto))
+
+        attrs = extract_clinical_state_attributes(all_user_text)
+        has_duration = bool(attrs.get("duration"))
+        has_severity = bool(attrs.get("severity")) or bool(attrs.get("temperature"))
+        has_location = bool(attrs.get("location"))
+
+        # Pillar 4 & 12: Missing information intake (Ask 2-3 questions without repeating answered ones)
+        if detected_protocols and (not has_duration or not has_severity) and len(chat_history or []) <= 2:
+            proto = detected_protocols[0][1]
+            diffs = proto.get("differentials", [])
+
+            lines = [
+                f"I understand you are experiencing **{proto['name']}**.\n"
+            ]
+
+            if diffs:
+                lines.append("### 🩺 Differential Considerations:")
+                lines.append("Based on the initial symptoms reported, possible conditions to evaluate include:")
+                for d in diffs[:3]:
+                    lines.append(f"- **{d}**")
+                lines.append("*(Note: These are differential considerations for clinical discussion, not a definitive diagnosis.)*\n")
+
+            lines.append("To guide you safely, please help answer a few missing questions:")
+            q_list = []
+            for q in proto.get("intake_questions", []):
+                if has_duration and any(w in q.lower() for w in ["how long", "how many days", "how many hours", "when did"]):
+                    continue
+                if has_severity and any(w in q.lower() for w in ["temperature", "scale of 1 to 10", "severity"]):
+                    continue
+                if has_location and any(w in q.lower() for w in ["where in", "where is", "where precisely"]):
+                    continue
+                q_list.append(q)
+
+            if not has_duration and not any("how long" in q.lower() for q in q_list):
+                q_list.append("How long have you had this problem, and is it getting better or worse?")
+
+            for i, q in enumerate(q_list[:3], 1):
+                lines.append(f"**{i}.** {q}")
+
+            # Pillar 8: Patient history understanding
+            med_hx = (patient_context.get("medical_history", "") if patient_context else "")
+            if med_hx:
+                lines.append(f"\n*Noted from your health record: History of {med_hx}. We will consider this for clinical safety.*")
+
+            return "\n".join(lines)
+
+        # Non-critical complete answer with OTC medication
         medications = retrieved_context.get("medications", [])
         has_evidence = retrieved_context.get("has_verified_evidence", False)
         symptoms = retrieved_context.get("symptoms", [])
 
-        # Check if basic details like duration are mentioned
-        text_lower = (user_message + " " + " ".join([h.get("content", "") for h in (chat_history or [])])).lower()
-        has_duration = any(w in text_lower for w in ["day", "days", "week", "yesterday", "since", "hours", "morning"])
-
-        if symptoms and not has_duration and len(chat_history or []) <= 1:
-            sym_list = ", ".join([s.title() for s in symptoms])
+        if not has_evidence and not medications:
             return (
-                f"I understand you are experiencing **{sym_list}**. To provide you with safe, accurate guidance:\n\n"
-                "**1.** How many days or hours have you been having this problem?\n"
-                "**2.** For fever/pain, what is your temperature or how severe is the pain (mild, moderate, severe)?\n"
-                "**3.** Do you have any associated symptoms like chills, severe weakness, nausea, or breathing difficulty?\n\n"
-                "*Please reply with these details so I can assess whether you need immediate medical attention or safe first-line medication.*"
-            )
-
-        if not has_evidence:
-            return (
-                "🟢 **CLINICAL SYMPTOM GUIDANCE**\n\n"
-                "I have recorded your symptoms. To ensure your safety, precise medical recommendations must be grounded "
-                "in verified clinical documentation.\n\n"
+                "🟢 **CLINICAL HEALTH GUIDANCE**\n\n"
+                "I have recorded your symptoms and health context. To ensure complete safety, please note that "
+                "personalized treatment decisions require clinical examination by a physician.\n\n"
                 "**Recommended Action:**\n"
-                "- If your symptoms are severe, lasting more than 3 days, or accompanied by high fever (>102°F) or breathing difficulty, "
-                "please consult a doctor immediately.\n"
-                "- You can schedule an appointment directly with our hospital physicians through the Velora Care portal."
+                "- If your symptoms persist beyond 48-72 hours or are accompanied by fever (>102°F) or breathlessness, "
+                "please schedule a consultation with our hospital physicians through the Velora Care portal.\n"
+                "- Ensure adequate hydration, rest, and monitor for any sudden changes."
             )
 
         response_parts = [
             "🟢 **CONDITION ASSESSMENT: MILD / NON-CRITICAL**\n\n"
-            f"Based on your reported symptoms (**{', '.join([s.title() for s in symptoms])}**) and lack of critical red flags, "
-            "here is verified over-the-counter medication guidance grounded in official CDSCO / DailyMed regulatory monographs:"
+            f"Based on your symptoms (**{', '.join([s.title() for s in symptoms]) if symptoms else 'reported concern'}**) and lack of critical red flags, "
+            "here is verified over-the-counter guidance grounded in official CDSCO / DailyMed regulatory monographs:"
         ]
+
+        # Pillar 8: Patient history integration
+        med_hx = (patient_context.get("medical_history", "") if patient_context else "")
+        if med_hx:
+            response_parts.append(f"*Patient Clinical Context: Verified history of {med_hx}. Recommendations screened for safety.*")
 
         for med in medications:
             med_name = med.get("name", "Medication")
@@ -281,7 +438,7 @@ class DeterministicRAGProvider(BaseLLMProvider):
         response_parts.append(
             "\n---\n"
             "👨‍⚕️ **When to Consult a Doctor:**\n"
-            "If your symptoms worsen, or if fever/discomfort persists past 48 to 72 hours without relief, "
+            "If your symptoms worsen, or if discomfort persists past 48 to 72 hours without relief, "
             "stop taking over-the-counter medicine and schedule an in-person consultation with our hospital doctor."
         )
 
