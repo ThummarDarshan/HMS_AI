@@ -46,56 +46,78 @@ Velora Care is built on a decoupled, service-oriented web architecture:
 ## 📊 System Architecture Diagram
 
 ```mermaid
-flowchart TB
-    subgraph ClientLayer["Frontend Client Layer (React 18 + TypeScript + Vite)"]
-        UI_Home["Landing & Public Portal"]
-        UI_Auth["Auth & Google OAuth"]
-        UI_Admin["Admin Operations Console"]
-        UI_Doctor["Doctor Consultation Station"]
-        UI_Patient["Patient Health Portal"]
-        UI_Staff["Ward & Billing Desk"]
-        UI_AI["3D Interactive AI Assistant"]
+flowchart TD
+    subgraph Frontend["Frontend Layer (React 18, TypeScript, Vite)"]
+        UI_Home[Landing Page]
+        UI_Auth[Authentication and Google OAuth]
+        UI_Admin[Admin Operations Console]
+        UI_Doctor[Doctor Consultation Station]
+        UI_Patient[Patient Portal and 3D Avatar]
+        UI_Staff[Ward and Billing Desk]
     end
 
-    subgraph GatewayLayer["API Gateway & Security Layer (Django REST Framework)"]
-        AUTH_MW["JWT Authentication & Permissions"]
-        THROTTLE_MW["Rate Throttling & DDoS Defense"]
-        CORS_MW["CORS & CSRF Middleware"]
-        AUDIT_MW["Clinical Audit & Action Logging"]
+    subgraph API_Gateway["API Gateway and Security (Django REST Framework)"]
+        MW_Auth[JWT Auth and Role Verification]
+        MW_Throttle[Rate Throttling and Security]
+        MW_Audit[Audit Logging and Verification]
     end
 
-    subgraph ServiceLayer["Core Backend Modules (Django Applications)"]
-        SVC_Users["Accounts & User Management"]
-        SVC_Patients["Patient Records & Encrypted EMR"]
-        SVC_Doctors["Doctor Profiles & Schedules"]
-        SVC_Appts["Atomic Appointment Scheduler"]
-        SVC_Beds["Beds & Ward Allocations"]
-        SVC_Lab["Laboratory & Diagnostic Tests"]
-        SVC_Bill["Billing, Invoicing & Payments"]
-        SVC_Notify["Real-time Support & Notifications"]
+    subgraph Backend_Services["Core Hospital Modules"]
+        SVC_Users[Accounts and User Management]
+        SVC_Patients[Patient Records and Encrypted EMR]
+        SVC_Doctors[Doctor Profiles and Schedules]
+        SVC_Appts[Atomic Appointment Scheduler]
+        SVC_Beds[Beds and Ward Allocations]
+        SVC_Lab[Laboratory and Diagnostic Tests]
+        SVC_Bill[Billing and Invoicing Engine]
     end
 
-    subgraph AIEngineLayer["AI Clinical Assistant Engine"]
-        CLIN_Triage["Universal Condition Registry (13+ Pillars)"]
-        CLIN_Safety["Red-Flag Emergency Detector (108/112)"]
-        CLIN_Allergy["Patient Allergy Conflict Checker"]
-        CLIN_Guard["Anti-Prescription Guardrail"]
-        RAG_Search["Vector/Keyword Monograph Search"]
-        LLM_Provider["Gemini 1.5/2.5 / Deterministic Offline Engine"]
+    subgraph AI_Engine["AI Clinical Assistant Engine"]
+        CLIN_Triage[Universal Condition Registry]
+        CLIN_Safety[Emergency Detector and Red Flags]
+        CLIN_Allergy[Allergy Conflict Checker]
+        CLIN_Guard[Anti-Prescription Guardrail]
+        RAG_Search[Monograph Retrieval RAG]
+        LLM_Model[Gemini AI and Safe Fallback]
     end
 
-    subgraph StorageLayer["Data & Persistence Layer"]
-        DB_Postgres[("PostgreSQL Database")]
-        STORE_Cloud["Cloudinary Media Storage"]
-        KNOW_Base[("CDSCO & DailyMed Drug Monographs")]
+    subgraph Storage["Persistence Layer"]
+        DB_Postgres[(PostgreSQL Database)]
+        STORE_Cloud[(Cloudinary Media Storage)]
+        KNOW_Base[(CDSCO and DailyMed Monographs)]
     end
 
-    ClientLayer --> GatewayLayer
-    GatewayLayer --> ServiceLayer
-    ServiceLayer --> StorageLayer
-    SVC_Patients -.-> AIEngineLayer
-    AIEngineLayer --> KNOW_Base
-    AIEngineLayer --> LLM_Provider
+    UI_Home --> MW_Auth
+    UI_Auth --> MW_Auth
+    UI_Admin --> MW_Auth
+    UI_Doctor --> MW_Auth
+    UI_Patient --> MW_Auth
+    UI_Staff --> MW_Auth
+
+    MW_Auth --> MW_Throttle
+    MW_Throttle --> MW_Audit
+
+    MW_Audit --> SVC_Users
+    MW_Audit --> SVC_Patients
+    MW_Audit --> SVC_Doctors
+    MW_Audit --> SVC_Appts
+    MW_Audit --> SVC_Beds
+    MW_Audit --> SVC_Lab
+    MW_Audit --> SVC_Bill
+
+    UI_Patient --> CLIN_Triage
+    CLIN_Triage --> CLIN_Safety
+    CLIN_Safety --> CLIN_Allergy
+    CLIN_Allergy --> CLIN_Guard
+    CLIN_Guard --> RAG_Search
+    RAG_Search --> LLM_Model
+    RAG_Search --> KNOW_Base
+
+    SVC_Patients --> DB_Postgres
+    SVC_Appts --> DB_Postgres
+    SVC_Beds --> DB_Postgres
+    SVC_Bill --> DB_Postgres
+    SVC_Lab --> STORE_Cloud
 ```
 
 ---
@@ -104,102 +126,87 @@ flowchart TB
 
 ```mermaid
 erDiagram
-    CUSTOM_USER ||--o| PATIENT_PROFILE : "has profile"
-    CUSTOM_USER ||--o| DOCTOR_PROFILE : "has profile"
-    CUSTOM_USER ||--o{ NOTIFICATION : "receives"
-    CUSTOM_USER ||--o{ AUDIT_LOG : "triggers"
+    CUSTOM_USER ||--o| PATIENT_PROFILE : has
+    CUSTOM_USER ||--o| DOCTOR_PROFILE : has
+    CUSTOM_USER ||--o{ NOTIFICATION : receives
+    CUSTOM_USER ||--o{ AUDIT_LOG : triggers
 
-    PATIENT_PROFILE ||--o{ APPOINTMENT : "books"
-    PATIENT_PROFILE ||--o{ BED_ASSIGNMENT : "occupies"
-    PATIENT_PROFILE ||--o{ INVOICE : "billed to"
-    PATIENT_PROFILE ||--o{ LAB_TEST_ORDER : "undergoes"
-    PATIENT_PROFILE ||--o{ MEDICAL_RECORD : "owns"
-    PATIENT_PROFILE ||--o{ CHAT_SESSION : "holds consultations"
+    PATIENT_PROFILE ||--o{ APPOINTMENT : books
+    PATIENT_PROFILE ||--o{ BED_ASSIGNMENT : occupies
+    PATIENT_PROFILE ||--o{ INVOICE : billed_to
+    PATIENT_PROFILE ||--o{ LAB_TEST_ORDER : undergoes
+    PATIENT_PROFILE ||--o{ CHAT_SESSION : holds
 
-    DOCTOR_PROFILE ||--o{ APPOINTMENT : "attends"
-    DOCTOR_PROFILE ||--o{ MEDICAL_RECORD : "creates"
-    DOCTOR_PROFILE ||--o{ LAB_TEST_ORDER : "orders"
+    DOCTOR_PROFILE ||--o{ APPOINTMENT : attends
+    DOCTOR_PROFILE ||--o{ LAB_TEST_ORDER : orders
 
-    WARD ||--o{ BED : "contains"
-    BED ||--o{ BED_ASSIGNMENT : "allocated in"
+    WARD ||--o{ BED : contains
+    BED ||--o{ BED_ASSIGNMENT : allocated_to
 
-    INVOICE ||--o{ INVOICE_ITEM : "itemizes"
-    INVOICE ||--o{ PAYMENT_RECORD : "settled with"
+    INVOICE ||--o{ INVOICE_ITEM : itemizes
+    INVOICE ||--o{ PAYMENT_RECORD : settled_with
 
-    CHAT_SESSION ||--o{ CHAT_MESSAGE : "contains"
-    CHAT_MESSAGE ||--o{ CITATION_SOURCE : "references"
+    CHAT_SESSION ||--o{ CHAT_MESSAGE : contains
 
     CUSTOM_USER {
         int id PK
-        string email UK
-        string username UK
-        string role "admin | doctor | patient | staff"
+        string email
+        string username
+        string role
         string first_name
         string last_name
-        string phone_number
         boolean is_active
-        datetime created_at
     }
 
     PATIENT_PROFILE {
         int id PK
         int user_id FK
-        date date_of_birth
+        string date_of_birth
         string gender
         string blood_group
-        text encrypted_allergies
-        text encrypted_medical_history
         string emergency_contact
-        string address
     }
 
     DOCTOR_PROFILE {
         int id PK
         int user_id FK
         string specialization
-        string license_number UK
+        string license_number
         int consultation_fee
-        string qualification
         int experience_years
-        string available_days
-        time shift_start
-        time shift_end
     }
 
     APPOINTMENT {
         int id PK
         int patient_id FK
         int doctor_id FK
-        date appointment_date
-        time appointment_time
-        string status "pending | confirmed | completed | cancelled"
-        text reason_for_visit
-        datetime created_at
+        string appointment_date
+        string appointment_time
+        string status
     }
 
     WARD {
         int id PK
         string name
-        string ward_type "general | icu | private | semi_private"
+        string ward_type
         int total_beds
     }
 
     BED {
         int id PK
         int ward_id FK
-        string bed_number UK
-        string status "available | occupied | maintenance"
+        string bed_number
+        string status
         decimal daily_rate
     }
 
     INVOICE {
         int id PK
         int patient_id FK
-        string invoice_number UK
+        string invoice_number
         decimal total_amount
         decimal paid_amount
-        string payment_status "unpaid | partial | paid"
-        datetime due_date
+        string payment_status
     }
 
     CHAT_SESSION {
@@ -207,8 +214,7 @@ erDiagram
         int user_id FK
         string session_title
         string primary_condition
-        jsonb clinical_context
-        datetime created_at
+        string created_at
     }
 ```
 
@@ -221,46 +227,41 @@ The AI Clinical Assistant is designed with a **safety-first**, **one-question-at
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Patient as Patient / User
-    participant Frontend as Chat UI & 3D Avatar
-    participant View as Assistant View (DRF)
-    participant Emergency as Emergency Detector
-    participant Triage as Clinical Triage Engine
+    actor User as Patient User
+    participant UI as Chat UI and 3D Avatar
+    participant API as Assistant API View
+    participant Safety as Emergency Detector
+    participant Engine as Clinical Triage Engine
     participant Registry as Condition Registry
-    participant RAG as Knowledge Base (CDSCO/DailyMed)
-    participant LLM as Gemini AI / Safe Engine
+    participant RAG as Knowledge Base RAG
+    participant LLM as Gemini AI Model
 
-    Patient->>Frontend: Types symptom (e.g., "I have high fever")
-    Frontend->>Frontend: Sets Avatar State: "listening" -> "processing"
-    Frontend->>View: POST /api/ai-assistant/chat/ (message, session_id)
+    User->>UI: Reports symptom (e.g. Fever)
+    UI->>UI: Avatar state changes to Listening
+    UI->>API: POST /api/ai-assistant/chat/
     
-    critical Deterministic Safety Gate
-        View->>Emergency: Scan message against acute red-flag lexicon
-        alt Acute Emergency Detected (Chest pain, Stroke, Hemorrhage)
-            Emergency-->>View: Flag Critical (Severity 5)
-            View-->>Frontend: Urgent 108/112 Alert + Stop Consultation
-            Frontend->>Patient: Display Red Emergency Banner
+    API->>Safety: Check for emergency red flags
+    alt Acute Red Flag Emergency Detected
+        Safety-->>API: Critical Emergency (Call 108 or 112)
+        API-->>UI: Emergency Alert Response
+        UI->>User: Display Emergency Banner and Hotline
+    else Safe Clinical Presentation
+        API->>Engine: Process with conversation history
+        Engine->>Registry: Check required clinical slots
+        alt Missing Clinical Details (Age, Duration, Temperature)
+            Registry-->>Engine: Next single question
+            Engine-->>API: Return single targeted question
+        else Sufficient Information Collected
+            Engine->>RAG: Retrieve verified drug monograph
+            RAG-->>Engine: Official CDSCO and DailyMed docs
+            Engine->>LLM: Synthesize educational response
+            LLM-->>Engine: Safe non-prescriptive advice
+            Engine-->>API: Formatted response with citations
         end
+        API-->>UI: Return JSON response
+        UI->>UI: Avatar state changes to Speaking
+        UI->>User: Render markdown answer and sources
     end
-
-    View->>Triage: Process message with session clinical_context
-    Triage->>Registry: Lookup condition ("fever") & check gathered slots
-    
-    alt Missing Essential Clinical Data (Age, Duration, Temp)
-        Registry-->>Triage: Return NEXT single question
-        Triage-->>View: Response: Single inquiry + adaptive guidance
-    else Sufficient Clinical Context Gathered
-        Triage->>RAG: Search verified drug monographs & care guidelines
-        RAG-->>Triage: Grounding documents (paracetamol monograph, caveats)
-        Triage->>Triage: Verify Patient Registered Allergies
-        Triage->>LLM: Synthesize clinical educational summary
-        LLM-->>Triage: Safe, non-prescriptive, structured advice
-        Triage-->>View: Formatted response with sources & disclaimer
-    end
-
-    View-->>Frontend: Return JSON payload (text, sources, context, metadata)
-    Frontend->>Frontend: Update Avatar State: "speaking" (speech synthesis)
-    Frontend->>Patient: Render Markdown, Sources & Action Cards
 ```
 
 ### 13 Clinical Conversation Pillars
@@ -287,27 +288,26 @@ The authentication subsystem enforces strict separation of privileges across **A
 
 ```mermaid
 flowchart TD
-    Start(["User Request"]) --> Auth{"Authenticated?"}
+    Start([User Request]) --> Auth{Authenticated?}
     
-    Auth -- No --> CheckPublic{"Public Route?"}
-    CheckPublic -- Yes --> AllowPublic["Render Public Page (Home, About, Doctors)"]
-    CheckPublic -- No --> Login["Redirect to Login (/login)"]
+    Auth -->|No| CheckPublic{Public Route?}
+    CheckPublic -->|Yes| AllowPublic[Render Public Home and Doctors Page]
+    CheckPublic -->|No| Login[Redirect to Login Page]
     
-    Auth -- Yes --> ExtractRole["Extract Role from JWT Payload"]
+    Auth -->|Yes| ExtractRole[Extract Role from JWT Payload]
+    ExtractRole --> RoleBranch{User Role}
     
-    ExtractRole --> RoleBranch{"Role Category"}
+    RoleBranch -->|Admin| AdminArea[Admin Dashboard]
+    AdminArea --> AdminCaps[User Management, Analytics, Audit Logs]
     
-    RoleBranch -- "admin" --> AdminArea["Admin Dashboard (/dashboard)"]
-    AdminArea --> AdminCaps["Manage Users, System Settings, Full Analytics, Audit Logs"]
+    RoleBranch -->|Doctor| DocArea[Doctor Station]
+    DocArea --> DocCaps[Manage Appointments, Patient EMR, Lab Orders]
     
-    RoleBranch -- "doctor" --> DocArea["Doctor Station (/dashboard)"]
-    DocArea --> DocCaps["Manage Appointments, View Assigned Patients, Prescribe Lab Tests"]
+    RoleBranch -->|Patient| PatArea[Patient Portal]
+    PatArea --> PatCaps[3D AI Assistant, Book Appointments, View Bills]
     
-    RoleBranch -- "patient" --> PatArea["Patient Portal (/dashboard)"]
-    PatArea --> PatCaps["Book Appointments, 3D AI Clinical Assistant, Medical History, Bills"]
-    
-    RoleBranch -- "staff" --> StaffArea["Staff Reception (/dashboard)"]
-    StaffArea --> StaffCaps["Bed Allocations, Ward Intake, Cashier Billing, Patient Registration"]
+    RoleBranch -->|Staff| StaffArea[Staff Desk]
+    StaffArea --> StaffCaps[Bed Allocation, Billing Cashier, Admissions]
 ```
 
 ---
@@ -318,26 +318,16 @@ To prevent double-booking of doctor schedules under high concurrency, appointmen
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Requested: Patient selects Doctor, Date & Time Slot
-    
-    state "Atomic Transaction Check" as TransCheck {
-        Requested --> RowLock: Acquire select_for_update on Doctor Schedule
-        RowLock --> SlotVerify: Check UniqueConstraint(doctor, date, time)
-    }
-
-    SlotVerify --> Conflict: Slot Already Reserved
-    Conflict --> Requested: Return 409 Conflict (Choose another slot)
-
-    SlotVerify --> Booked: No Overlap Detected
-    Booked --> Confirmed: Saved in Database & Alert Sent
-    
-    Confirmed --> Rescheduled: Patient/Doctor requests time change
-    Rescheduled --> Confirmed: New Slot Validated
-    
-    Confirmed --> InConsultation: Patient Check-In on Visit Date
-    InConsultation --> Completed: Consultation Finished & Prescription Added
-    
-    Confirmed --> Cancelled: Cancelled before consultation
+    [*] --> SlotSelection
+    SlotSelection --> ConcurrencyCheck : Submit Selected Slot
+    ConcurrencyCheck --> SlotConflict : Overlapping Reservation
+    SlotConflict --> SlotSelection : Choose New Slot
+    ConcurrencyCheck --> Confirmed : Lock Acquired and Slot Verified
+    Confirmed --> Rescheduled : Time Change Requested
+    Rescheduled --> ConcurrencyCheck : Validate New Slot
+    Confirmed --> InConsultation : Patient Check In
+    InConsultation --> Completed : Doctor Completes Visit
+    Confirmed --> Cancelled : Appointment Cancelled
     Cancelled --> [*]
     Completed --> [*]
 ```
@@ -348,16 +338,16 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-    A["Patient Admitted"] --> B{"Bed Available?"}
-    B -- No --> C["Place in Ward Waiting Queue"]
+    A[Patient Admission] --> B{Bed Available?}
+    B -->|No| C[Ward Waiting Queue]
     C --> B
-    B -- Yes --> D["Assign Bed (General / ICU / Private)"]
-    D --> E["Update Bed Status -> 'occupied'"]
-    E --> F["Daily Room Charges Added to Patient Invoice"]
-    F --> G["Doctor Signs Discharge Order"]
-    G --> H["Clear Patient Account & Mark Status -> 'maintenance'"]
-    H --> I["Housekeeping Cleaning Complete -> 'available'"]
-    I --> J(["Bed Ready for Next Patient"])
+    B -->|Yes| D[Assign Bed: General, ICU, or Private]
+    D --> E[Set Status to Occupied]
+    E --> F[Accrue Daily Bed Charges to Invoice]
+    F --> G[Doctor Signs Discharge Order]
+    G --> H[Patient Settlement and Maintenance Mode]
+    H --> I[Housekeeping Cleaning Finished]
+    I --> J[Bed Available for Next Patient]
 ```
 
 ---
@@ -366,33 +356,40 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    Trig["Patient Discharge / Consultation / Lab Order"] --> Agg["Aggregate Invoice Line Items"]
+    StartBilling[Trigger Billing Event] --> Agg[Aggregate Line Items]
     
-    subgraph BillableServices["Billable Services"]
-        S1["Doctor Consultation Fees"]
-        S2["Daily Bed & Ward Charges"]
-        S3["Diagnostic Laboratory Tests"]
-        S4["Pharmacy & Consumables"]
+    subgraph Services[Billable Services]
+        S1[Doctor Consultation Fees]
+        S2[Daily Ward Bed Charges]
+        S3[Diagnostic Laboratory Orders]
+        S4[Pharmacy and Consumables]
     end
-    
-    BillableServices --> Agg
-    Agg --> Gen["Generate Invoice with Unique Number (INV-XXXX)"]
-    Gen --> Select["Select Payment Method"]
-    
-    Select --> M1["Cash / Counter Payment"]
-    Select --> M2["Credit / Debit Card"]
-    Select --> M3["UPI / QR Code"]
-    Select --> M4["Mediclaim / Insurance TPA"]
-    
-    M1 & M2 & M3 & M4 --> Exec["Execute Transaction & Cap Max Limit Safeguard"]
-    Exec --> Validate{"Full or Partial?"}
-    
-    Validate -- Full Amount Paid --> StatusPaid["Status: 'paid'"]
-    Validate -- Remaining Balance --> StatusPartial["Status: 'partial'"]
-    
-    StatusPaid --> Receipt["Generate Printable Thermal / PDF Receipt"]
-    StatusPartial --> FollowUp["Add to Receivables Ledger"]
-    Receipt --> Done(["Billing Completed"])
+
+    S1 --> Agg
+    S2 --> Agg
+    S3 --> Agg
+    S4 --> Agg
+
+    Agg --> Gen[Generate Invoice INV-XXXX]
+    Gen --> Select[Select Payment Method]
+
+    Select --> M1[Cash Counter Payment]
+    Select --> M2[Debit or Credit Card]
+    Select --> M3[UPI QR Code Payment]
+    Select --> M4[Insurance TPA Claim]
+
+    M1 --> Process[Validate Payment and Limit Safeguards]
+    M2 --> Process
+    M3 --> Process
+    M4 --> Process
+
+    Process --> Check{Payment Amount}
+    Check -->|Full Payment| Paid[Status Paid]
+    Check -->|Partial Payment| Partial[Status Partial]
+
+    Paid --> Receipt[Generate Printable Receipt]
+    Partial --> Ledger[Update Receivables Balance]
+    Receipt --> Complete([Billing Completed])
 ```
 
 ---
