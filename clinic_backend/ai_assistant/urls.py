@@ -5,7 +5,6 @@ from ai_assistant.views import (
     ChatSessionDetailView,
     MedicationSearchAPIView,
     MedicationDetailAPIView,
-    SyncMedicationsAPIView,
 )
 
 urlpatterns = [
@@ -14,5 +13,4 @@ urlpatterns = [
     path("sessions/<uuid:pk>/", ChatSessionDetailView.as_view(), name="ai_chat_session_detail"),
     path("medications/search/", MedicationSearchAPIView.as_view(), name="ai_medication_search"),
     path("medications/<int:pk>/", MedicationDetailAPIView.as_view(), name="ai_medication_detail"),
-    path("medications/sync/", SyncMedicationsAPIView.as_view(), name="ai_medications_sync"),
 ]

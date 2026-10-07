@@ -4,152 +4,88 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 from decouple import config
-from ai_assistant.safety.medical_knowledge import (
-    COMPREHENSIVE_DISEASE_PROTOCOLS,
-    LAB_TEST_REFERENCE_RANGES,
-    MEDICAL_ABBREVIATIONS,
-    parse_lab_reports_from_text,
-    extract_clinical_state_attributes,
-    expand_medical_abbreviations,
-    classify_user_intent,
-)
-from ai_assistant.safety.prescription_guard import PrescriptionGuard
 
 logger = logging.getLogger(__name__)
 
-CLINICAL_CHATBOT_SYSTEM_PROMPT = """You are an intelligent, empathetic, and medically responsible Clinical AI Health Assistant for Velora Care Hospital Management System (HMS).
-You assist patients consulting regarding symptoms, health conditions, lab reports, and medications across ALL medical disease categories.
+CLINICAL_SYSTEM_PROMPT = """You are "Velora AI Care", the official AI Medical & Clinical Assistant inside the Hospital Management System (HMS).
+Your purpose is to provide empathetic, highly structured, safe, and helpful medical guidance. You operate as a smart clinical assistant.
 
-You adhere strictly to the 13 Core Healthcare Conversational Pillars:
+CORE INTERACTION & ROUTING DIRECTIVES:
 
-================================================================================
-1. PATIENT INFORMATION COLLECTION (STRUCTURED INTAKE)
-================================================================================
-Collect basic information in a structured, non-repetitive way:
-- Chief complaint & primary symptoms
-- When symptoms started (onset) & duration
-- Severity (1–10 scale) or temperature reading
-- Frequency & progression (getting better, worse, or same)
-- Previous medical conditions (diabetes, hypertension, asthma, etc.)
-- Current medications & allergies
-- Associated signs (nausea, shortness of breath, dizziness)
+1. DIRECT ANSWERS FOR ANY BASIC, GENERAL, OR LIFESTYLE QUESTION (ALWAYS GIVE DIRECT ANSWERS):
+- When the user asks ANY basic question, definition, lifestyle query, medication rule, nutrition question, everyday health inquiry, or general curiosity:
+  Examples:
+  * "Can I drink milk after taking medicine?"
+  * "How much water should I drink in a day?"
+  * "What is normal blood pressure?"
+  * "What is diabetes?" / "What causes dengue?" / "What is cholesterol?"
+  * "How can I prevent acid reflux?"
+  * "How much sleep is recommended?"
+  * "What foods are high in iron?"
+  * "Why do I get headaches when stressed?"
+  * "Is walking 30 minutes a day enough for heart health?"
+  * "What does a CBC blood test check?"
+  * Greetings / Casual inquiries: "Hello", "Hi", "Who are you?", "How can you help me?"
+- ALWAYS PROVIDE A DIRECT, THOROUGH, CLEAR, AND INFORMATIVE ANSWER IMMEDIATELY.
+- DO NOT ask clarifying questions for basic or general questions. Provide the answer with structured bullet points, clear facts, and practical health tips.
 
-================================================================================
-2. SYMPTOM UNDERSTANDING ACROSS ALL BODY SYSTEMS
-================================================================================
-Recognize symptoms and clinical groupings across all disease systems:
-- Respiratory: Cough, fever, sore throat, runny nose, shortness of breath, chest congestion, wheezing
-- Digestive: Abdominal pain, vomiting, diarrhea, nausea, constipation, acid reflux, heartburn
-- Neurological: Headache, dizziness, vertigo, weakness, numbness, confusion
-- Cardiovascular: Chest pressure, palpitations, racing heartbeat
-- Musculoskeletal: Joint pain, knee pain, lower back pain, muscle spasms, stiffness
-- Dermatological: Rash, itching, hives (urticaria), redness, blisters
-- Genitourinary: Burning urination (dysuria), urinary frequency, flank pain
-- Endocrine / Metabolic: High/low blood sugar, extreme thirst, shakiness
-- General / Systemic: Fever, fatigue, body aches, chills
+2. ONE RELEVANT QUESTION AT A TIME (ONLY FOR ACTIVE PERSONAL SYMPTOM COMPLAINTS):
+- When a patient explicitly reports an ACTIVE personal symptom or acute physical complaint (e.g., "I have a fever", "I have severe stomach pain", "My head hurts since yesterday", "I feel dizzy today", "I have a bad cough and sore throat"):
+  * FIRST, express empathy in ONE brief, supportive sentence (e.g., "I am sorry to hear that you are dealing with a fever.").
+  * SECOND, ask EXACTLY ONE single, clinically relevant follow-up question to gather essential triage context:
+    - Step 1 (Duration): "How long have you had the fever?"
+    - Step 2 (Severity / Temperature / Location): "What is your highest measured temperature, and how did you measure it?" or "Where exactly is the pain located, and is it mild, moderate, or severe?"
+    - Step 3 (Associated Symptoms): "Are you experiencing any other symptoms, such as headache, cough, sore throat, vomiting, body aches, rash, or pain while urinating?"
+    - Step 4 (Exposure / Context): "Have you recently traveled, had mosquito exposure, or been around anyone who was sick?"
+  * STRICT PROHIBITION: NEVER ask multiple questions at once during triage. Never say: "What is your age, temperature, duration, and other symptoms?". Only ask the SINGLE next most useful question.
+  * DO NOT OVER-QUESTION: Stop after 2 to 3 clarifying turns or once key dimensions are gathered.
 
-================================================================================
-3. SYMPTOM → POSSIBLE CONDITIONS (DIFFERENTIAL CONSIDERATIONS)
-================================================================================
-Identify potential causes / differential considerations, but NEVER claim a definitive diagnosis.
-Always express appropriate clinical uncertainty:
-Example: "Based on fever, cough, and sore throat, possible considerations to discuss with a doctor include:
-- Viral Upper Respiratory Infection (Common Cold)
-- Influenza (Flu)
-- COVID-19
-- Acute Bronchitis
-Note: These are differential considerations for clinical discussion, not a final diagnosis."
+3. STRUCTURED FINAL CLINICAL GUIDANCE (AFTER SYMPTOM TRIAGE):
+When sufficient context has been gathered for a personal symptom complaint, conclude with this clean structure:
 
-================================================================================
-4. FOLLOW-UP QUESTION GENERATION (DYNAMIC & NEVER REPETITIVE)
-================================================================================
-Patient provides symptom → Identify missing information → Ask 2 to 3 concise, relevant follow-up questions.
-CRITICAL RULE: Check conversation history first. NEVER ask questions that the patient has ALREADY answered (e.g., if duration or temperature is already provided, do NOT ask for duration or temperature again).
+### What your symptoms may indicate
+[Clear educational explanation of potential non-definitive causes. Never give an absolute diagnosis.]
 
-================================================================================
-5. EMERGENCY & RED-FLAG DETECTION
-================================================================================
-Immediately screen for life-threatening emergencies:
-- Severe crushing chest pain radiating to arm/jaw, shortness of breath
-- Sudden face droop, one-sided weakness, slurred speech (Stroke / FAST)
-- Sudden thunderclap headache, stiff neck with high fever
-- Unconsciousness, seizures, severe bleeding, coughing/vomiting blood
-- Anaphylaxis (swelling of lips/tongue/throat, inability to breathe)
-- Severe self-harm or suicidal thoughts
-ACTION: Advise immediate emergency care (Call 108 / 112 in India / 911) and going to the hospital emergency department. Do not provide home remedies for emergencies.
+### What you can do now
+[Supportive self-care, hydration, rest, safe non-pharmacological comfort steps.]
 
-================================================================================
-6. MEDICATION INFORMATION GROUNDING
-================================================================================
-Ground all medication advice in official CDSCO (Govt of India) and DailyMed / FDA documentation:
-- Generic name & common brand names
-- Pharmacological class & indication
-- Safe OTC dosage, timing, and administration (take with water after meals)
-- Common vs serious adverse effects
-- Key warnings, contraindications, and drug interactions
+### Watch for these warning signs
+[Specific red flags requiring urgent medical care.]
 
-================================================================================
-7. ALLERGY CHECKING & CONFLICT DETECTION
-================================================================================
-Cross-check patient profile allergies and user-stated allergies against medications and cross-reactive classes:
-- Penicillin allergy conflicts with Amoxicillin, Ampicillin, Augmentin
-- NSAID allergy conflicts with Ibuprofen, Aspirin, Diclofenac
-- Sulfa allergy conflicts with Septra / Bactrim
-NEVER recommend an offending or cross-reactive drug. Prominently alert the patient.
+### When to see a doctor
+[Clear guidance on when to seek in-person clinical evaluation.]
 
-================================================================================
-8. PATIENT HISTORY UNDERSTANDING
-================================================================================
-Actively retrieve and incorporate the patient's verified medical history from their HMS profile:
-- E.g., if patient has Diabetes and complains of dizziness: address potential hypoglycemia or dehydration.
-- E.g., if patient has Hypertension: avoid decongestants that raise BP (pseudoephedrine) and NSAIDs that cause fluid retention.
+*Medical Notice: This guidance is educational and does not constitute a clinical diagnosis. Always consult a qualified physician for personalized care.*
 
-================================================================================
-9. MEDICAL REPORT UNDERSTANDING (LAB VALUE INTERPRETATION)
-================================================================================
-When user shares laboratory values (CBC, Hemoglobin, Blood Sugar, HbA1c, Creatinine, LFT, Lipid profile, etc.):
-- Extract test name and numeric value
-- Compare against clinical reference ranges
-- Flag result clearly: [NORMAL], [ELEVATED / HIGH], or [LOW]
-- Provide clinical significance and next steps (e.g., fasting confirmation, repeat testing)
-- Explicitly instruct patient to share reports with their doctor for formal diagnostic correlation.
+4. FIRST AID INQUIRIES (IMMEDIATE ACTIONABLE STEPS):
+- For first aid questions (e.g., "What should I do for a minor burn?", "First aid for a nosebleed", "Someone fainted"):
+  * Give immediate, concise, step-by-step instructions:
+    ### Immediate first aid
+    [1, 2, 3 numbered actionable steps]
+    ### What to avoid
+    [Crucial things NOT to do, e.g., never apply ice/butter to burns, never tilt head backward for nosebleeds]
+    ### When to seek urgent medical care
+    [Red flags requiring emergency room evaluation]
 
-================================================================================
-10. MEDICAL TERMINOLOGY & ABBREVIATION EXPANSION
-================================================================================
-Fluently understand and expand clinical shorthand:
-BP (Blood Pressure), HR (Heart Rate), DM (Diabetes Mellitus), HTN (Hypertension),
-SOB (Shortness of Breath), UTI (Urinary Tract Infection), GERD (Acid Reflux),
-CBC (Complete Blood Count), FBS/PPBS (Fasting/Post-Prandial Blood Sugar), HbA1c, LFT, KFT.
+5. HOSPITAL MANAGEMENT SYSTEM (HMS) SERVICES & NAVIGATION:
+- Connect the patient to existing hospital features:
+  * Book Appointment: Guide them to the [Book Appointment](/appointments/new) page.
+  * View Medical Records / Reports: Guide them to [My Lab Reports](/my-lab-reports) or [Medical Records](/medical-records).
+  * Doctors & Specialists: Guide them to the [Doctors](/doctors) directory or [Departments](/departments).
+  * Visiting Hours: General hospital visiting hours are 10:00 AM – 12:00 PM and 5:00 PM – 7:00 PM (Emergency 24/7).
 
-================================================================================
-11. INTENT CLASSIFICATION
-================================================================================
-Recognize the user's conversational intent:
-- SYMPTOM_INQUIRY, MEDICATION_QUESTION, REPORT_QUESTION, ALLERGY_QUESTION,
-  EMERGENCY, MEDICAL_HISTORY, APPOINTMENT, HOSPITAL_INFORMATION, GENERAL_HEALTH_QUESTION.
+6. PRESCRIPTION POLICY (STRICT ANTI-PRESCRIBING GUARD):
+- NEVER prescribe medication, give personalized drug schedules, or tell a patient to take specific prescription antibiotics.
+- If asked "What antibiotic should I take?", "Prescribe medicine", or "What dose should I take?":
+  * Provide the Medication Safety Notice.
+  * Explain the general drug class educationally.
+  * Explain why antibiotics require clinical assessment, lab cultures, and a doctor's prescription.
+  * Recommend scheduling a consultation with a hospital doctor at [Book Appointment](/appointments/new).
 
-================================================================================
-12. CONVERSATION STATE TRACKING
-================================================================================
-Maintain a structured mental state of the patient's case:
-{
-  "symptoms": [...],
-  "duration": "...",
-  "severity_or_temperature": "...",
-  "location": "...",
-  "allergies": [...],
-  "medications": [...]
-}
-Update this state each turn and tailor replies without asking already answered details.
-
-================================================================================
-13. MEDICAL SAFETY & REFUSAL BEHAVIOR
-================================================================================
-Strictly refuse unsafe or out-of-scope clinical requests:
-- Pediatric dosing: "I need information such as the child's exact age, weight in kilograms, and clinical context. Pediatric dosing must be confirmed by a pediatrician or doctor."
-- Emergency medication requests: "Severe chest pain or acute breathlessness requires urgent emergency evaluation. Please seek immediate hospital emergency care rather than relying on a chatbot."
-- Prescription drugs: Do not write prescriptions for Schedule H/X drugs (antibiotics, steroids, opioids). Direct patient to a licensed physician.
+7. MEDICAL SAFETY & TONE:
+- Never say "You definitely have X".
+- Use phrases like: "Symptoms like yours can occur with...", "Possible causes include...", "Consider discussing this with a doctor."
+- Maintain a warm, empathetic, professional, and reassuring tone.
 """
 
 
@@ -158,299 +94,131 @@ class BaseLLMProvider(ABC):
     def generate_chat_response(
         self,
         user_message: str,
-        retrieved_context: Dict[str, Any],
+        chat_history: Optional[List[Any]] = None,
         patient_context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         pass
 
 
 class GeminiLLMProvider(BaseLLMProvider):
-    """Google Gemini LLM Integration with Multi-Turn Clinical Triage"""
+    """
+    Direct Google Gemini LLM Integration operating purely through the Gemini API Key.
+    """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-3.5-flash"):
-        self.api_key = api_key or config("GEMINI_API_KEY", default=config("LLM_API_KEY", default=""))
-        self.model_name = config("GEMINI_MODEL", default=config("LLM_MODEL", default=model))
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = api_key or config("GEMINI_API_KEY", default=config("LLM_API_KEY", default="")).strip()
+        configured_model = config("GEMINI_MODEL", default=config("LLM_MODEL", default="gemini-3.5-flash-lite")).strip()
+        self.model_name = model or configured_model or "gemini-3.5-flash-lite"
+        # Ordered list of supported models with verified availability
+        self.fallback_models = [
+            self.model_name,
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite",
+            "gemini-flash-lite-latest",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-3.6-flash",
+            "gemini-3.5-flash",
+        ]
+        # Deduplicate while preserving order
+        self.fallback_models = list(dict.fromkeys(self.fallback_models))
 
     def generate_chat_response(
         self,
         user_message: str,
-        retrieved_context: Dict[str, Any],
+        chat_history: Optional[List[Any]] = None,
         patient_context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None,
     ) -> str:
         if not self.api_key:
-            return DeterministicRAGProvider().generate_chat_response(
-                user_message, retrieved_context, patient_context, chat_history
+            return (
+                "⚠️ **AI Assistant Configuration Notice**:\n\n"
+                "The AI Chatbot operates directly through the Google Gemini API key, but no API key is currently configured.\n\n"
+                "Please configure `GEMINI_API_KEY` in your backend `.env` configuration file to enable the AI Chatbot."
             )
 
         try:
             from google import genai
+            from google.genai import types
+
             client = genai.Client(api_key=self.api_key)
 
-            # 1. Format verified official documentation
-            docs = retrieved_context.get("documents", [])
-            docs_text = ""
-            if docs:
-                docs_text = "\n\n".join([
-                    f"### Medication: {doc.medication_name} ({doc.source})\n"
-                    f"Section: {doc.section_title}\n"
-                    f"Content: {doc.content}"
-                    for doc in docs[:6]
-                ])
+            # Build System Instruction with patient profile context
+            system_instruction = CLINICAL_SYSTEM_PROMPT
+            if patient_context:
+                patient_info_lines = []
+                if patient_context.get("full_name"):
+                    patient_info_lines.append(f"- Patient Name: {patient_context['full_name']}")
+                if patient_context.get("allergies"):
+                    patient_info_lines.append(f"- Known Allergies: {patient_context['allergies']}")
+                if patient_context.get("medical_history"):
+                    patient_info_lines.append(f"- Medical History / Chronic Conditions: {patient_context['medical_history']}")
+                if patient_context.get("age"):
+                    patient_info_lines.append(f"- Age: {patient_context['age']}")
+                if patient_context.get("gender"):
+                    patient_info_lines.append(f"- Gender: {patient_context['gender']}")
 
-            # 2. Format Patient Profile Context
-            patient_info = patient_context or {}
-            patient_profile_str = (
-                f"- Name: {patient_info.get('full_name', 'Patient')}\n"
-                f"- Age: {patient_info.get('age', 'Not recorded in profile')}\n"
-                f"- Known Allergies: {patient_info.get('allergies', 'None reported')}\n"
-                f"- Medical History: {patient_info.get('medical_history', 'None reported')}\n"
-                f"- Current Medications: {', '.join(patient_info.get('current_medications', [])) or 'None reported'}"
+                if patient_info_lines:
+                    system_instruction += (
+                        "\n\n--- CURRENT PATIENT PROFILE CONTEXT ---\n"
+                        + "\n".join(patient_info_lines)
+                        + "\nAlways take the above profile into consideration, especially known allergies and chronic conditions!\n"
+                    )
+
+            # Build multi-turn conversational contents
+            contents = []
+            if chat_history:
+                # Limit to the last 14 messages for conversational context
+                recent_history = chat_history[-14:]
+                for msg in recent_history:
+                    role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else "user")
+                    content = getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else "")
+                    if not content or not content.strip():
+                        continue
+                    # In Google GenAI, roles are 'user' and 'model'
+                    genai_role = "model" if role in ["assistant", "model", "system"] else "user"
+                    contents.append(
+                        types.Content(
+                            role=genai_role,
+                            parts=[types.Part.from_text(text=content.strip())],
+                        )
+                    )
+
+            # Append current user message
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=user_message.strip())],
+                )
             )
 
-            # 3. Format Multi-Turn Chat History
-            history_text = ""
-            if chat_history:
-                formatted_turns = []
-                for turn in chat_history[-8:]:  # Include last 8 turns for complete context
-                    role = "Patient" if turn.get("role") == "user" else "Assistant"
-                    content = turn.get("content", "").strip()
-                    if content:
-                        formatted_turns.append(f"{role}: {content}")
-                if formatted_turns:
-                    history_text = "\n".join(formatted_turns)
-
-            # 4. Build prompt
-            prompt_parts = [
-                CLINICAL_CHATBOT_SYSTEM_PROMPT,
-                "\n--- PATIENT PROFILE ---",
-                patient_profile_str,
-            ]
-
-            if docs_text:
-                prompt_parts.extend([
-                    "\n--- VERIFIED CDSCO & DAILYMED REGULATORY MONOGRAPHS ---",
-                    docs_text,
-                ])
-
-            if history_text:
-                prompt_parts.extend([
-                    "\n--- PREVIOUS CONSULTATION HISTORY ---",
-                    history_text,
-                ])
-
-            prompt_parts.extend([
-                "\n--- CURRENT PATIENT MESSAGE ---",
-                f"Patient: {user_message}",
-                "\nClinical AI Assistant Response (follow the 3-step workflow):",
-            ])
-
-            full_prompt = "\n".join(prompt_parts)
-
-            # Candidate models for high availability
-            candidate_models = [self.model_name]
-            if self.model_name != "gemini-3.5-flash":
-                candidate_models.append("gemini-3.5-flash")
-            if "gemini-3.5-flash-lite" not in candidate_models:
-                candidate_models.append("gemini-3.5-flash-lite")
-
-            last_err = None
-            for model_to_try in candidate_models:
+            last_error = None
+            for model_candidate in self.fallback_models:
                 try:
                     response = client.models.generate_content(
-                        model=model_to_try,
-                        contents=full_prompt,
+                        model=model_candidate,
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            temperature=0.35,
+                        ),
                     )
                     if response and response.text:
                         return response.text.strip()
-                except Exception as ex:
-                    logger.warning(f"Gemini model '{model_to_try}' invocation failed: {ex}")
-                    last_err = ex
+                except Exception as model_err:
+                    last_error = model_err
+                    logger.warning(f"Gemini model '{model_candidate}' failed: {model_err}. Trying next candidate...")
                     continue
 
-            logger.error(f"All Gemini models failed, falling back to deterministic RAG: {last_err}")
-            return DeterministicRAGProvider().generate_chat_response(
-                user_message, retrieved_context, patient_context, chat_history
-            )
+            # If all model candidates failed
+            logger.error(f"All Gemini models failed. Last error: {last_error}")
+            return "I'm temporarily unable to process your request. Please try again in a moment."
 
         except Exception as e:
-            logger.warning(f"Gemini API invocation fallback: {e}")
-            return DeterministicRAGProvider().generate_chat_response(
-                user_message, retrieved_context, patient_context, chat_history
-            )
-
-
-class DeterministicRAGProvider(BaseLLMProvider):
-    """
-    Deterministic clinical synthesis engine grounded strictly in verified documents
-    and comprehensive medical knowledge across all 13 healthcare conversation capabilities.
-    Operates 100% offline with zero external API dependencies.
-    """
-
-    def generate_chat_response(
-        self,
-        user_message: str,
-        retrieved_context: Dict[str, Any],
-        patient_context: Optional[Dict[str, Any]] = None,
-        chat_history: Optional[List[Dict[str, str]]] = None,
-    ) -> str:
-        text_lower = user_message.lower().strip()
-        all_user_text = " ".join([h.get("content", "") for h in (chat_history or []) if h.get("role") == "user"] + [user_message])
-
-        # Pillar 13: Pediatric dosing refusal
-        is_peds, peds_refusal = PrescriptionGuard.detect_pediatric_dosing(user_message)
-        if is_peds:
-            return peds_refusal
-
-        # Pillar 13: Emergency medication request refusal
-        is_emerg_req, emerg_refusal = PrescriptionGuard.detect_emergency_medication_request(user_message)
-        if is_emerg_req:
-            return emerg_refusal
-
-        # Pillar 9: Lab Report Understanding
-        lab_reports = parse_lab_reports_from_text(user_message)
-        if lab_reports:
-            lines = [
-                "📋 **LABORATORY REPORT INTERPRETATION**\n",
-                "I have analyzed the test values from your message against standard clinical reference ranges:\n"
-            ]
-            for r in lab_reports:
-                badge = "🔴 HIGH" if r["flag"] == "HIGH" else ("🟡 LOW" if r["flag"] == "LOW" else "🟢 NORMAL")
-                lines.append(f"- **{r['test_name']}**: `{r['value']} {r['unit']}` [{badge}] (Reference range: {r['reference_range']})")
-                lines.append(f"  *Clinical Note:* {r['guidance']}")
-
-            lines.append("\n⚠️ **Important Medical Advice:**")
-            lines.append("Lab values must always be correlated with your clinical symptoms and physical examination. Please schedule a review with your hospital physician to discuss appropriate management.")
-            return "\n".join(lines)
-
-        # Pillar 7: Direct allergy inquiries (e.g. "Can I take amoxicillin?")
-        patient_allergies = (patient_context.get("allergies", "") if patient_context else "").lower()
-        if "amoxicillin" in text_lower and "penicillin" in patient_allergies:
-            return (
-                "🚨 **CRITICAL ALLERGY ALERT: DO NOT TAKE THIS MEDICATION**\n\n"
-                "You asked about **Amoxicillin**, but your hospital medical record lists an allergy to **Penicillin**.\n\n"
-                "**Clinical Risk:** Amoxicillin belongs to the penicillin class of beta-lactam antibiotics. "
-                "Taking amoxicillin with a known penicillin allergy carries a severe risk of cross-reactivity and potentially life-threatening anaphylaxis.\n\n"
-                "**Action:** Please consult your doctor for a safe alternative antibiotic (such as a macrolide) that does not cross-react."
-            )
-
-        # Pillar 10: Medical abbreviation expansion check
-        _, expanded = expand_medical_abbreviations(user_message)
-
-        # Pillar 2 & 3: Disease protocols & Differentials
-        detected_protocols = []
-        for key, proto in COMPREHENSIVE_DISEASE_PROTOCOLS.items():
-            if any(re.search(r"\b" + re.escape(kw) + r"\b", all_user_text.lower()) for kw in proto["keywords"]):
-                detected_protocols.append((key, proto))
-
-        attrs = extract_clinical_state_attributes(all_user_text)
-        has_duration = bool(attrs.get("duration"))
-        has_severity = bool(attrs.get("severity")) or bool(attrs.get("temperature"))
-        has_location = bool(attrs.get("location"))
-
-        # Pillar 4 & 12: Missing information intake (Ask 2-3 questions without repeating answered ones)
-        if detected_protocols and (not has_duration or not has_severity) and len(chat_history or []) <= 2:
-            proto = detected_protocols[0][1]
-            diffs = proto.get("differentials", [])
-
-            lines = [
-                f"I understand you are experiencing **{proto['name']}**.\n"
-            ]
-
-            if diffs:
-                lines.append("### 🩺 Differential Considerations:")
-                lines.append("Based on the initial symptoms reported, possible conditions to evaluate include:")
-                for d in diffs[:3]:
-                    lines.append(f"- **{d}**")
-                lines.append("*(Note: These are differential considerations for clinical discussion, not a definitive diagnosis.)*\n")
-
-            lines.append("To guide you safely, please help answer a few missing questions:")
-            q_list = []
-            for q in proto.get("intake_questions", []):
-                if has_duration and any(w in q.lower() for w in ["how long", "how many days", "how many hours", "when did"]):
-                    continue
-                if has_severity and any(w in q.lower() for w in ["temperature", "scale of 1 to 10", "severity"]):
-                    continue
-                if has_location and any(w in q.lower() for w in ["where in", "where is", "where precisely"]):
-                    continue
-                q_list.append(q)
-
-            if not has_duration and not any("how long" in q.lower() for q in q_list):
-                q_list.append("How long have you had this problem, and is it getting better or worse?")
-
-            for i, q in enumerate(q_list[:3], 1):
-                lines.append(f"**{i}.** {q}")
-
-            # Pillar 8: Patient history understanding
-            med_hx = (patient_context.get("medical_history", "") if patient_context else "")
-            if med_hx:
-                lines.append(f"\n*Noted from your health record: History of {med_hx}. We will consider this for clinical safety.*")
-
-            return "\n".join(lines)
-
-        # Non-critical complete answer with OTC medication
-        medications = retrieved_context.get("medications", [])
-        has_evidence = retrieved_context.get("has_verified_evidence", False)
-        symptoms = retrieved_context.get("symptoms", [])
-
-        if not has_evidence and not medications:
-            return (
-                "🟢 **CLINICAL HEALTH GUIDANCE**\n\n"
-                "I have recorded your symptoms and health context. To ensure complete safety, please note that "
-                "personalized treatment decisions require clinical examination by a physician.\n\n"
-                "**Recommended Action:**\n"
-                "- If your symptoms persist beyond 48-72 hours or are accompanied by fever (>102°F) or breathlessness, "
-                "please schedule a consultation with our hospital physicians through the Velora Care portal.\n"
-                "- Ensure adequate hydration, rest, and monitor for any sudden changes."
-            )
-
-        response_parts = [
-            "🟢 **CONDITION ASSESSMENT: MILD / NON-CRITICAL**\n\n"
-            f"Based on your symptoms (**{', '.join([s.title() for s in symptoms]) if symptoms else 'reported concern'}**) and lack of critical red flags, "
-            "here is verified over-the-counter guidance grounded in official CDSCO / DailyMed regulatory monographs:"
-        ]
-
-        # Pillar 8: Patient history integration
-        med_hx = (patient_context.get("medical_history", "") if patient_context else "")
-        if med_hx:
-            response_parts.append(f"*Patient Clinical Context: Verified history of {med_hx}. Recommendations screened for safety.*")
-
-        for med in medications:
-            med_name = med.get("name", "Medication")
-            sections = med.get("sections", {})
-            brand_str = f" (Common brands: {', '.join(med['brand_names'][:3])})" if med.get("brand_names") else ""
-
-            response_parts.append(f"\n### 💊 Recommended First-Line: {med_name}{brand_str}")
-
-            if "DOSAGE_AND_ADMINISTRATION" in sections:
-                response_parts.append(f"**Dosage & Administration:**\n{sections['DOSAGE_AND_ADMINISTRATION']['content']}")
-
-            if "INDICATIONS" in sections:
-                response_parts.append(f"📄 **Proof & Clinical Justification:**\n{sections['INDICATIONS']['content']}")
-
-            if "WARNINGS" in sections:
-                response_parts.append(f"⚠️ **Key Safety Precautions:**\n{sections['WARNINGS']['content']}")
-
-            if "CONTRAINDICATIONS" in sections:
-                response_parts.append(f"⛔ **Contraindications:**\n{sections['CONTRAINDICATIONS']['content']}")
-
-        response_parts.append(
-            "\n---\n"
-            "👨‍⚕️ **When to Consult a Doctor:**\n"
-            "If your symptoms worsen, or if discomfort persists past 48 to 72 hours without relief, "
-            "stop taking over-the-counter medicine and schedule an in-person consultation with our hospital doctor."
-        )
-
-        return "\n\n".join(response_parts)
+            logger.error(f"Gemini API initialization or execution error: {e}", exc_info=True)
+            return "I'm temporarily unable to process your request. Please try again in a moment."
 
 
 def get_llm_provider() -> BaseLLMProvider:
-    """Factory to return configured LLM provider"""
-    provider_type = config("LLM_PROVIDER", default="auto").lower()
-    gemini_key = config("GEMINI_API_KEY", default=config("LLM_API_KEY", default=None))
-
-    if provider_type == "gemini" or (provider_type == "auto" and gemini_key):
-        return GeminiLLMProvider(api_key=gemini_key)
-
-    return DeterministicRAGProvider()
+    """Factory to return configured LLM provider directly using API Key"""
+    gemini_key = config("GEMINI_API_KEY", default=config("LLM_API_KEY", default=""))
+    return GeminiLLMProvider(api_key=gemini_key)

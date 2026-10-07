@@ -1,56 +1,125 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Sparkles,
   Plus,
   Trash2,
   History,
   MessageSquare,
-  ShieldCheck,
   RefreshCw,
   X,
-  Bot,
-  ArrowLeft,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Search,
-  PhoneCall,
-  User as UserIcon,
-  HeartPulse,
-  ChevronRight,
+  Palette,
+  Check,
 } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 import {
   aiAssistantService,
-  ChatMessageRecord,
-  ChatSessionRecord,
+  type ChatMessageRecord,
+  type ChatSessionRecord,
 } from '@/services/aiAssistantService';
-import { useAuth } from '@/context/AuthContext';
 import { ChatWindow } from './ChatWindow';
 import { ChatInput } from './ChatInput';
+import { AiChatbotLogo } from './AiChatbotLogo';
+import type { ChatBackgroundTheme } from './ChatWallpaper';
+import { Chatbot3DLoadingScreen } from './Chatbot3DLoadingScreen';
 import { toast } from 'sonner';
 
+const THEME_OPTIONS: { id: ChatBackgroundTheme; name: string; desc: string; previewColor: string }[] = [
+  {
+    id: 'clinical-doodle',
+    name: 'Clinical Doodle',
+    desc: 'Light medical pattern (Matches Reference)',
+    previewColor: 'bg-[#edf3f8]',
+  },
+  {
+    id: 'soft-pearl',
+    name: 'Soft Pearl',
+    desc: 'Minimalist clean hospital pearl',
+    previewColor: 'bg-[#f1f5f9]',
+  },
+  {
+    id: 'teal-breeze',
+    name: 'Teal Breeze',
+    desc: 'Fresh healthcare mint & cyan',
+    previewColor: 'bg-[#e6f7f6]',
+  },
+  {
+    id: 'whatsapp-light',
+    name: 'Messaging Light',
+    desc: 'Classic soft messaging tones',
+    previewColor: 'bg-[#e5ddd5]',
+  },
+];
+
 export const PatientHealthAssistant: React.FC = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
+  const [show3DIntro, setShow3DIntro] = useState(true);
   const [sessions, setSessions] = useState<ChatSessionRecord[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessageRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSessionsLoading, setIsSessionsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [lastUserMessage, setLastUserMessage] = useState<string>('');
+
+  // Background Theme State (Defaults to 'clinical-doodle' from User's 2nd reference image)
+  const [wallpaperTheme, setWallpaperTheme] = useState<ChatBackgroundTheme>(() => {
+    return (localStorage.getItem('chat_wallpaper_theme') as ChatBackgroundTheme) || 'clinical-doodle';
+  });
+
+  const [isThemeMenuOpen, setIsThemeMenuOpen] = useState(false);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+
+  // In-memory Session Cache for instant sub-second opening
+  const sessionCacheRef = useRef<Record<string, ChatMessageRecord[]>>({});
 
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // Listen to sidebar clicks on AI Health Assistant to trigger 3D loading animation
+  useEffect(() => {
+    const handleTriggerLoading = () => {
+      setShow3DIntro(true);
+    };
+    window.addEventListener('trigger-ai-3d-loading', handleTriggerLoading);
+    return () => {
+      window.removeEventListener('trigger-ai-3d-loading', handleTriggerLoading);
+    };
+  }, []);
+
+  // Close theme menu on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (themeMenuRef.current && !themeMenuRef.current.contains(e.target as Node)) {
+        setIsThemeMenuOpen(false);
+      }
+    };
+    if (isThemeMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isThemeMenuOpen]);
+
+  const handleSelectTheme = (themeId: ChatBackgroundTheme) => {
+    setWallpaperTheme(themeId);
+    localStorage.setItem('chat_wallpaper_theme', themeId);
+    setIsThemeMenuOpen(false);
+    toast.success('Background theme updated');
+  };
 
   const fetchSessions = async () => {
     setIsSessionsLoading(true);
     try {
       const data = await aiAssistantService.getSessions();
       setSessions(data);
+      // Pre-cache messages in memory so clicking any past consultation opens instantly!
+      data.forEach((s) => {
+        if (s.messages && s.messages.length > 0) {
+          sessionCacheRef.current[s.id] = s.messages;
+        }
+      });
     } catch (err) {
       console.error('Failed to load chat sessions:', err);
     } finally {
@@ -60,12 +129,26 @@ export const PatientHealthAssistant: React.FC = () => {
 
   const handleSelectSession = async (session: ChatSessionRecord) => {
     setCurrentSessionId(session.id);
-    setIsLoading(true);
     setError(null);
+    setIsHistoryOpen(false);
+
+    // 1. INSTANT LOAD: Check memory cache or pre-fetched session messages
+    const cached = sessionCacheRef.current[session.id] || session.messages;
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setIsLoading(false);
+      sessionCacheRef.current[session.id] = cached;
+      return; // Loaded instantly in 0.01 seconds!
+    }
+
+    // 2. Fallback: Fetch from API if not yet in cache
+    setIsLoading(true);
     try {
       const fullSession = await aiAssistantService.getSession(session.id);
-      setMessages(fullSession.messages || []);
-    } catch (err) {
+      const msgs = fullSession.messages || [];
+      setMessages(msgs);
+      sessionCacheRef.current[session.id] = msgs;
+    } catch {
       toast.error('Failed to load consultation history.');
       setError('Unable to load consultation messages.');
     } finally {
@@ -77,6 +160,7 @@ export const PatientHealthAssistant: React.FC = () => {
     setCurrentSessionId(undefined);
     setMessages([]);
     setError(null);
+    setIsHistoryOpen(false);
   };
 
   const handleDeleteSession = async (e: React.MouseEvent, id: string) => {
@@ -88,7 +172,7 @@ export const PatientHealthAssistant: React.FC = () => {
         handleNewChat();
       }
       toast.success('Consultation history deleted.');
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete consultation.');
     }
   };
@@ -125,21 +209,24 @@ export const PatientHealthAssistant: React.FC = () => {
         sources: response.sources,
         red_flags: response.redFlags,
         allergy_conflicts: response.allergyConflicts,
-        lab_reports: response.labReports,
-        differentials: response.differentials,
-        clinical_state: response.clinicalState,
-        abbreviations_expanded: response.abbreviationsExpanded,
         doctor_review_required: response.doctorReviewRequired,
         is_emergency: response.emergency,
         created_at: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, assistantMsg]);
+      setMessages((prev) => {
+        const next = [...prev, assistantMsg];
+        const activeId = currentSessionId || response.session_id;
+        if (activeId) {
+          sessionCacheRef.current[activeId] = next;
+        }
+        return next;
+      });
     } catch (err: any) {
       console.error('Chat error:', err);
       const errMsg =
         err?.response?.data?.error ||
-        'Unable to retrieve response. Please try again.';
+        'Unable to retrieve medical information. Please try again.';
       setError(errMsg);
       toast.error(errMsg);
     } finally {
@@ -153,248 +240,212 @@ export const PatientHealthAssistant: React.FC = () => {
     }
   };
 
-  const filteredSessions = sessions.filter((s) =>
-    (s.title || 'Consultation').toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const currentSession = sessions.find((s) => s.id === currentSessionId);
+  if (show3DIntro) {
+    return (
+      <Chatbot3DLoadingScreen
+        patientName={user?.first_name || user?.username || 'Patient'}
+        onComplete={() => setShow3DIntro(false)}
+      />
+    );
+  }
 
   return (
-    <div className="relative flex h-screen w-full bg-[#F8FAFD] dark:bg-[#0A0F1D] text-[#1E293B] dark:text-[#F8FAFC] overflow-hidden select-none font-sans">
-      {/* Dynamic Animated Ambient Aurora Orbs */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
-        <div className="absolute -top-24 -left-24 w-[520px] h-[520px] rounded-full bg-[#EDE9FE]/75 dark:bg-purple-950/25 blur-[120px] aurora-orb-1" />
-        <div className="absolute top-1/4 -right-24 w-[550px] h-[550px] rounded-full bg-[#E0F2FE]/85 dark:bg-sky-950/25 blur-[130px] aurora-orb-2" />
-        <div className="absolute -bottom-24 left-1/3 w-[500px] h-[500px] rounded-full bg-[#E0F7FA]/75 dark:bg-teal-950/20 blur-[130px] aurora-orb-1" />
-      </div>
+    <div className="relative flex flex-col h-[calc(100vh-6.8rem)] rounded-2xl sm:rounded-3xl border border-border/80 bg-card/60 backdrop-blur-xl shadow-2xl overflow-hidden animate-fade-in">
+      {/* ================= WhatsApp / Messenger Top Navigation Header ================= */}
+      <div className="flex items-center justify-between px-3.5 sm:px-5 py-3 border-b border-border/80 bg-card/95 backdrop-blur-md flex-shrink-0 z-20">
+        <div className="flex items-center gap-3">
+          {/* Dedicated Medical AI Robotic Logo */}
+          <AiChatbotLogo size="md" showStatus={true} />
 
-      {/* Left Collapsible Clinical Panel / Consultation Drawer */}
-      <aside
-        className={`relative z-20 flex flex-col h-full border-r border-[#D9E2F0]/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-2xl transition-all duration-300 ease-in-out shadow-[4px_0_24px_rgba(30,58,138,0.03)] ${
-          isSidebarOpen ? 'w-72 sm:w-80' : 'w-0 -translate-x-full overflow-hidden border-r-0'
-        }`}
-      >
-        {/* Brand & Workspace Header */}
-        <div className="flex items-center justify-between p-4 pb-3 border-b border-[#D9E2F0]/70 dark:border-slate-800 flex-shrink-0">
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-[#2563EB] to-[#1E3A8A] text-white shadow-md shadow-[#2563EB]/25 flex-shrink-0">
-              <HeartPulse className="h-4.5 w-4.5" />
-            </div>
-            <div className="overflow-hidden">
-              <h1 className="font-bold text-sm tracking-tight text-[#1E3A8A] dark:text-white truncate">
-                Velora Clinical AI
-              </h1>
-              <p className="text-[10px] text-[#64748B] dark:text-slate-400 font-medium">
-                Health Assistant Workspace
-              </p>
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-foreground tracking-tight">
+              AI Health Assistant
+            </h2>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Online</span>
+              <span className="text-muted-foreground/40">•</span>
+              <span>24/7 Clinical AI Guidance</span>
             </div>
           </div>
-
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1.5 rounded-lg text-[#64748B] hover:text-[#1E3A8A] hover:bg-[#F0F5FA] dark:hover:bg-slate-800 transition-colors"
-            title="Collapse Sidebar"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
         </div>
 
-        {/* New Consultation CTA */}
-        <div className="p-3.5 pb-2 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Theme Selector Popover (Clean, Solid, Opaque - No Transparency Bleed) */}
+          <div className="relative" ref={themeMenuRef}>
+            <button
+              onClick={() => setIsThemeMenuOpen(!isThemeMenuOpen)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted text-xs font-medium text-muted-foreground hover:text-foreground transition-all shadow-xs"
+              title="Change background theme"
+            >
+              <Palette className="h-4 w-4 text-primary" />
+              <span className="hidden lg:inline">Theme</span>
+            </button>
+
+            {isThemeMenuOpen && (
+              <div
+                className="absolute right-0 mt-2 w-64 rounded-2xl border border-border bg-card shadow-2xl p-2.5 z-50 animate-scale-in"
+                style={{ backgroundColor: 'hsl(var(--card))' }}
+              >
+                <div className="px-2 py-1 text-[11px] font-bold text-foreground uppercase tracking-wider border-b border-border/50 mb-1.5">
+                  Background Theme
+                </div>
+                <div className="space-y-1">
+                  {THEME_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleSelectTheme(opt.id)}
+                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-colors ${
+                        wallpaperTheme === opt.id
+                          ? 'bg-primary/10 text-primary font-semibold'
+                          : 'hover:bg-muted/60 text-foreground'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`w-4 h-4 rounded-full border border-border/80 shadow-xs flex-shrink-0 ${opt.previewColor}`}
+                        />
+                        <div>
+                          <div className="font-medium">{opt.name}</div>
+                          <div className="text-[10px] text-muted-foreground">{opt.desc}</div>
+                        </div>
+                      </div>
+                      {wallpaperTheme === opt.id && <Check className="h-4 w-4 text-primary" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Past Consultations Toggle Button */}
+          <button
+            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border border-border/80 bg-card hover:bg-muted text-xs font-medium text-muted-foreground hover:text-foreground transition-all shadow-xs"
+            title="View Past Consultations"
+          >
+            <History className="h-4 w-4 text-primary" />
+            <span className="hidden md:inline">History</span>
+            {sessions.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-primary/15 text-primary">
+                {sessions.length}
+              </span>
+            )}
+          </button>
+
+          {/* New Chat Button */}
           <button
             onClick={handleNewChat}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-semibold rounded-xl aurora-btn-gradient text-white transition-all shadow-md shadow-[#2563EB]/25 active:scale-[0.98]"
+            className="btn-gradient flex items-center gap-1 px-2.5 sm:px-3.5 py-1.5 text-xs font-semibold rounded-xl shadow-md active:scale-95"
+            title="Start New Consultation"
           >
             <Plus className="h-4 w-4" />
-            <span>New Consultation</span>
+            <span className="hidden sm:inline">New Consultation</span>
           </button>
         </div>
+      </div>
 
-        {/* Filter Search */}
-        <div className="px-3.5 pb-2 flex-shrink-0">
-          <div className="relative flex items-center">
-            <Search className="absolute left-3 h-3.5 w-3.5 text-[#94A3B8]" />
-            <input
-              type="text"
-              placeholder="Search consultations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs rounded-xl bg-[#F0F5FA]/80 dark:bg-slate-800/80 border border-[#D9E2F0]/80 dark:border-slate-700 text-[#1E293B] dark:text-slate-200 placeholder:text-[#94A3B8] focus:outline-none focus:border-[#2563EB] transition-colors"
-            />
-          </div>
-        </div>
+      {/* ================= Main Conversation Body ================= */}
+      <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+        {/* Chat Window Area (with selected light theme wallpaper and messages) */}
+        <ChatWindow
+          messages={messages}
+          isLoading={isLoading}
+          error={error}
+          wallpaperTheme={wallpaperTheme}
+          onRetry={handleRetry}
+          onSelectPrompt={(prompt) => handleSendMessage(prompt)}
+        />
 
-        {/* Consultations List */}
-        <div className="flex-1 overflow-y-auto px-3 py-1 space-y-1.5 custom-scrollbar">
-          <div className="px-2 py-1 flex items-center justify-between text-[11px] font-semibold text-[#64748B] uppercase tracking-wider">
-            <span>Recent Sessions</span>
-            <span>{sessions.length}</span>
-          </div>
-
-          {isSessionsLoading ? (
-            <div className="flex items-center justify-center p-6 text-xs text-[#64748B]">
-              <RefreshCw className="h-4 w-4 animate-spin mr-2 text-[#2563EB]" /> Loading history...
-            </div>
-          ) : filteredSessions.length === 0 ? (
-            <div className="p-6 text-center text-xs text-[#94A3B8]">
-              {searchQuery ? 'No matching records.' : 'No previous consultations recorded.'}
-            </div>
-          ) : (
-            filteredSessions.map((s) => {
-              const isSelected = currentSessionId === s.id;
-              return (
-                <div
-                  key={s.id}
-                  onClick={() => handleSelectSession(s)}
-                  className={`group relative flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                    isSelected
-                      ? 'border-[#2563EB]/60 bg-[#EFF6FF] dark:bg-blue-950/40 text-[#1E3A8A] dark:text-blue-200 shadow-xs font-semibold'
-                      : 'border-transparent hover:border-[#D9E2F0] hover:bg-[#F8FAFD] dark:hover:bg-slate-800/50 text-[#334155] dark:text-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 overflow-hidden">
-                    <MessageSquare
-                      className={`h-4 w-4 flex-shrink-0 ${
-                        isSelected ? 'text-[#2563EB]' : 'text-[#94A3B8] group-hover:text-[#2563EB]'
-                      }`}
-                    />
-                    <div className="overflow-hidden">
-                      <p className="truncate font-medium">{s.title || 'Consultation'}</p>
-                      <span className="text-[10px] text-[#94A3B8] block mt-0.5">
-                        {new Date(s.updated_at || s.created_at).toLocaleDateString([], {
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={(e) => handleDeleteSession(e, s.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-950 dark:hover:text-rose-300 text-[#94A3B8] transition-all flex-shrink-0 ml-1"
-                    title="Delete consultation"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* Bottom Profile & Return to Dashboard */}
-        <div className="p-3 border-t border-[#D9E2F0]/80 dark:border-slate-800 flex-shrink-0 space-y-2 bg-white/40 dark:bg-slate-900/40">
-          <div className="flex items-center justify-between p-2 rounded-xl bg-[#F0F5FA]/80 dark:bg-slate-800/80 border border-[#D9E2F0]/70 dark:border-slate-700">
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-[#2563EB] to-[#1E3A8A] text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-                {user?.first_name ? user.first_name[0] : 'U'}
-              </div>
-              <div className="overflow-hidden">
-                <p className="text-xs font-semibold text-[#1E3A8A] dark:text-white truncate">
-                  {user?.full_name || user?.first_name || 'Hospital User'}
-                </p>
-                <span className="text-[10px] font-semibold text-[#0284C7] dark:text-[#38BDF8]">
-                  {user?.role || 'CLINICAL'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-[#D9E2F0] dark:border-slate-700 hover:bg-[#F0F5FA] dark:hover:bg-slate-800 text-xs font-semibold text-[#1E3A8A] dark:text-slate-200 transition-colors"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 text-[#2563EB]" />
-            <span>Return to Hospital Dashboard</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Conversational Canvas */}
-      <main className="relative flex-1 min-w-0 flex flex-col h-full z-10 overflow-hidden">
-        {/* Top Header Bar */}
-        <header className="flex items-center justify-between px-4 sm:px-6 py-3 border-b border-[#D9E2F0]/80 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl flex-shrink-0 z-20 shadow-xs">
-          <div className="flex items-center gap-3 min-w-0">
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded-xl border border-[#D9E2F0] dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 text-[#64748B] hover:text-[#1E3A8A] hover:bg-[#F0F5FA] dark:hover:bg-slate-800 transition-colors shadow-xs flex-shrink-0"
-                title="Expand Consultations"
-              >
-                <PanelLeftOpen className="h-4 w-4 text-[#2563EB]" />
-              </button>
-            )}
-
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="relative flex-shrink-0">
-                <div className="p-2 rounded-xl bg-gradient-to-tr from-[#2563EB] to-[#1E3A8A] text-white shadow-sm">
-                  <Bot className="h-4.5 w-4.5" />
-                </div>
-                <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#38BDF8] border-2 border-white dark:border-slate-900" />
-              </div>
-
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm sm:text-base font-bold text-[#1E3A8A] dark:text-white truncate">
-                    {currentSession?.title || 'Velora Clinical Assistant'}
-                  </h2>
-                  <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#E0F2FE] text-[#0284C7] dark:bg-sky-950/60 dark:text-[#38BDF8] border border-[#BAE6FD] dark:border-sky-800">
-                    <ShieldCheck className="h-3 w-3" /> CDSCO Grounded
-                  </span>
-                </div>
-                <p className="text-[11px] text-[#64748B] dark:text-slate-400 truncate hidden sm:block">
-                  AI Symptom Triage & Verified Monograph Guidance
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Emergency Hotline Alert Badge */}
-            <a
-              href="tel:108"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 text-xs font-semibold transition-colors shadow-xs"
-              title="Call Ambulance Hotline"
-            >
-              <PhoneCall className="h-3 w-3 text-rose-600" />
-              <span className="hidden md:inline">Emergency:</span> 108 / 112
-            </a>
-
-            {!isSidebarOpen && (
-              <button
-                onClick={handleNewChat}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-xl aurora-btn-gradient text-white transition-all shadow-xs active:scale-95"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">New Chat</span>
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* Scrollable Chat Window Area */}
-        <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
-          <ChatWindow
-            messages={messages}
+        {/* Input Bar (Permanently pinned at bottom) */}
+        <div className="flex-shrink-0 p-2.5 sm:p-3.5 border-t border-border/80 bg-card/95 backdrop-blur-md z-10">
+          <ChatInput
+            onSend={handleSendMessage}
             isLoading={isLoading}
-            error={error}
-            onRetry={handleRetry}
-            onSelectPrompt={(prompt) => handleSendMessage(prompt)}
+            onQuickPrompt={(prompt) => handleSendMessage(prompt)}
           />
-
-          {/* Floating Bottom Console Bar */}
-          <div className="flex-shrink-0 p-3 sm:p-4 bg-gradient-to-t from-white/95 via-white/80 to-transparent dark:from-slate-900/95 dark:via-slate-900/80 backdrop-blur-md border-t border-[#D9E2F0]/60 dark:border-slate-800">
-            <ChatInput
-              onSend={handleSendMessage}
-              isLoading={isLoading}
-              onQuickPrompt={(prompt) => handleSendMessage(prompt)}
-            />
-            <p className="text-center text-[11px] text-[#94A3B8] mt-2">
-              Velora AI provides evidence-based guidance grounded in CDSCO and FDA monographs. In emergencies, dial <strong>108 / 112</strong> immediately.
-            </p>
-          </div>
         </div>
-      </main>
+
+        {/* Backdrop for history drawer on mobile */}
+        {isHistoryOpen && (
+          <div
+            onClick={() => setIsHistoryOpen(false)}
+            className="absolute inset-0 z-30 bg-black/40 backdrop-blur-xs transition-opacity sm:hidden"
+            aria-hidden="true"
+          />
+        )}
+
+        {/* History Slide-over Drawer */}
+        {isHistoryOpen && (
+          <div className="absolute inset-y-0 right-0 z-40 w-72 sm:w-84 border-l border-border/80 bg-card/95 backdrop-blur-2xl shadow-2xl p-4 flex flex-col animate-slide-left">
+            <div className="flex items-center justify-between pb-3 border-b border-border/80 flex-shrink-0">
+              <h3 className="font-semibold text-sm text-foreground flex items-center gap-2">
+                <History className="h-4 w-4 text-primary" /> Past Consultations
+              </h3>
+              <button
+                onClick={() => setIsHistoryOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors"
+                title="Close drawer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-3 space-y-2">
+              {isSessionsLoading ? (
+                <div className="flex items-center justify-center p-6 text-xs text-muted-foreground">
+                  <RefreshCw className="h-4 w-4 animate-spin mr-2" /> Loading consultations...
+                </div>
+              ) : sessions.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground">
+                  No previous consultation records found.
+                </div>
+              ) : (
+                sessions.map((s) => (
+                  <div
+                    key={s.id}
+                    onClick={() => handleSelectSession(s)}
+                    className={`group relative flex items-start justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                      currentSessionId === s.id
+                        ? 'border-primary/50 bg-primary/10 shadow-xs'
+                        : 'border-border/60 bg-card hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5 overflow-hidden">
+                      <MessageSquare className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                      <div className="overflow-hidden">
+                        <p className="text-xs font-semibold text-foreground truncate">
+                          {s.title || 'Consultation'}
+                        </p>
+                        {s.last_message && (
+                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {s.last_message.content}
+                          </p>
+                        )}
+                        <span className="text-[10px] text-muted-foreground/80 block mt-1">
+                          {new Date(s.updated_at || s.created_at).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={(e) => handleDeleteSession(e, s.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 hover:text-destructive text-muted-foreground transition-all ml-1 flex-shrink-0"
+                      title="Delete session"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

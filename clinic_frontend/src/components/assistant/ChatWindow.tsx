@@ -1,40 +1,61 @@
-import React, { useEffect, useRef } from 'react';
-import { Sparkles, Shield, AlertCircle, RefreshCw, HeartPulse, Stethoscope, Thermometer, Pill, AlertTriangle } from 'lucide-react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import {
+  Sparkles,
+  Shield,
+  AlertCircle,
+  RefreshCw,
+  HeartPulse,
+  Lock,
+  ArrowDown,
+  Stethoscope,
+  Pill,
+  Clock,
+  Flame,
+} from 'lucide-react';
 import { ChatMessageRecord } from '@/services/aiAssistantService';
 import { ChatMessageItem } from './ChatMessageItem';
+import { ChatTypingIndicator } from './ChatTypingIndicator';
+import { ChatWallpaper, ChatBackgroundTheme } from './ChatWallpaper';
+import { AiChatbotLogo } from './AiChatbotLogo';
+import { Chatbot3DAvatar } from './Chatbot3DAvatar';
 
 interface ChatWindowProps {
   messages: ChatMessageRecord[];
   isLoading: boolean;
   error?: string | null;
+  wallpaperTheme?: ChatBackgroundTheme;
   onRetry?: () => void;
   onSelectPrompt?: (prompt: string) => void;
 }
 
 const STARTER_CARDS = [
   {
-    icon: <Thermometer className="h-4 w-4 text-amber-500" />,
-    title: "Mild Fever & Fatigue",
-    desc: "I have a low fever (99.5°F) since yesterday morning",
-    prompt: "I have a low-grade fever of 99.5 F since yesterday morning with slight tiredness. What should I do?",
+    icon: Stethoscope,
+    title: 'Symptom Checker',
+    desc: 'Describe what you feel for clinical triage guidance',
+    prompt: 'What are the early symptoms of Dengue fever and when should I see a doctor?',
+    badge: 'Clinical',
   },
   {
-    icon: <Pill className="h-4 w-4 text-blue-500" />,
-    title: "Headache & Cold",
-    desc: "Mild throbbing headache and runny nose",
-    prompt: "I have had a mild headache and runny nose for 1 day. What safe medication can I take?",
+    icon: Pill,
+    title: 'Medication Safety',
+    desc: 'Dosage rules, contraindications, and warnings',
+    prompt: 'What is paracetamol used for and what are its maximum daily doses and warnings?',
+    badge: 'Monographs',
   },
   {
-    icon: <AlertTriangle className="h-4 w-4 text-red-500" />,
-    title: "High Fever / Urgent Check",
-    desc: "High fever (103°F) for multiple days with chills",
-    prompt: "I have had high fever 103.5 F for 4 days with severe shivering and body weakness.",
+    icon: Flame,
+    title: 'First Aid Guidance',
+    desc: 'Immediate emergency actions before professional help',
+    prompt: 'What is the immediate first aid protocol for minor to moderate burns?',
+    badge: 'Immediate',
   },
   {
-    icon: <Stethoscope className="h-4 w-4 text-emerald-500" />,
-    title: "Medication Information",
-    desc: "CDSCO monograph & safe usage",
-    prompt: "What is paracetamol used for, what is the safe dosage, and what are its contraindications?",
+    icon: Clock,
+    title: 'Hospital Services',
+    desc: 'OPD timings, appointments, and insurance TPAs',
+    prompt: 'How do I book a doctor appointment and what documents are required for insurance TPA?',
+    badge: 'Hospital',
   },
 ];
 
@@ -42,119 +63,182 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   messages,
   isLoading,
   error,
+  wallpaperTheme = 'clinical-doodle',
   onRetry,
   onSelectPrompt,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const scrollEndRef = useRef<HTMLDivElement>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const isNearBottomRef = useRef(true);
 
+  // Monitor scroll position
+  const handleScroll = useCallback(() => {
+    if (!containerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isNearBottom = distanceFromBottom < 100;
+    isNearBottomRef.current = isNearBottom;
+    setShowScrollBottom(!isNearBottom);
+  }, []);
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      });
+    }
+    scrollEndRef.current?.scrollIntoView({
+      behavior: smooth ? 'smooth' : 'auto',
+      block: 'end',
+    });
+  }, []);
+
+  // Auto-scroll on new messages only when in an active conversation
   useEffect(() => {
-    scrollEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading, error]);
+    if (messages.length === 0) {
+      // When opening chatbot on welcome screen, stay at the top to display 3D avatar & title
+      if (containerRef.current) {
+        containerRef.current.scrollTop = 0;
+      }
+      return;
+    }
 
-  if (messages.length === 0) {
-    return (
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col items-center justify-center p-4 sm:p-6 text-center animate-fade-in">
-        <div className="max-w-2xl w-full mx-auto space-y-6">
-          <div className="flex flex-col items-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#2563EB] to-[#1E3A8A] text-white flex items-center justify-center shadow-xl shadow-[#2563EB]/25 ring-8 ring-[#E0F2FE]/70 dark:ring-sky-950/40 mb-3.5 animate-bounce-subtle">
-              <HeartPulse className="h-8 w-8 text-white" />
-            </div>
-
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#1E3A8A] dark:text-white">
-              Clinical Health & Symptom Assistant
-            </h2>
-            <p className="mt-1.5 text-xs sm:text-sm text-[#475569] dark:text-slate-300 max-w-lg leading-relaxed">
-              Describe your symptoms from home. Our AI assistant evaluates symptoms, cross-checks official CDSCO and FDA clinical monographs, and guides you to safe OTC relief or immediate physician care.
-            </p>
-          </div>
-
-          {/* Quick Consultation Starters with Soft Aurora Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left pt-2">
-            {STARTER_CARDS.map((card, idx) => (
-              <button
-                key={idx}
-                onClick={() => onSelectPrompt && onSelectPrompt(card.prompt)}
-                className="aurora-card p-4 rounded-2xl text-left flex items-start gap-3.5 group hover:border-[#38BDF8] hover:bg-white/95 dark:hover:bg-slate-800 transition-all duration-300 hover:shadow-lg hover:shadow-[#38BDF8]/10 hover:-translate-y-0.5"
-              >
-                <div className="p-2.5 rounded-xl bg-[#EFF6FF] dark:bg-sky-950/50 group-hover:bg-[#E0F2FE] dark:group-hover:bg-sky-900/60 transition-colors mt-0.5 flex-shrink-0">
-                  {card.icon}
-                </div>
-                <div>
-                  <h4 className="text-xs sm:text-sm font-semibold text-[#1E3A8A] dark:text-white group-hover:text-[#2563EB] dark:group-hover:text-[#38BDF8] transition-colors">
-                    {card.title}
-                  </h4>
-                  <p className="text-[11px] sm:text-xs text-[#64748B] dark:text-slate-400 line-clamp-1 mt-0.5">
-                    {card.desc}
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Medically Responsible Notice */}
-          <div className="aurora-card rounded-2xl p-4 text-left space-y-2 border border-[#D9E2F0] dark:border-slate-800">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[#1E3A8A] dark:text-[#38BDF8]">
-              <Shield className="h-4 w-4 text-[#2563EB] dark:text-[#38BDF8]" />
-              <span>Grounded in CDSCO (Govt of India) & DailyMed (FDA) Clinical Monographs</span>
-            </div>
-            <ul className="text-[11px] sm:text-xs text-[#475569] dark:text-slate-300 space-y-1 list-disc list-inside">
-              <li>Provides verified over-the-counter relief guidance with official proof for mild cases.</li>
-              <li>Instantly flags red flag symptoms requiring clinical doctor assessment.</li>
-              <li>In a medical emergency, call <strong>108 / 112</strong> immediately.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    if (isNearBottomRef.current || messages.length === 1) {
+      scrollToBottom(true);
+    }
+  }, [messages, isLoading, error, scrollToBottom]);
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-6">
-      {/* Centered chat message stream */}
-      <div className="max-w-4xl mx-auto w-full space-y-6">
-        {messages.map((msg, idx) => (
-          <ChatMessageItem key={msg.id || idx} message={msg} />
-        ))}
+    <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden">
+      {/* Background Wallpaper */}
+      <ChatWallpaper theme={wallpaperTheme} />
 
-        {/* Loading Typing Indicator */}
-        {isLoading && (
-          <div className="flex items-start gap-3.5 animate-fade-in">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#2563EB] to-[#1E3A8A] flex items-center justify-center text-white flex-shrink-0 shadow-md shadow-[#2563EB]/20 mt-1">
-              <Sparkles className="h-4.5 w-4.5 animate-spin-slow" />
+      {/* Main Scrollable Messages Container */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="relative z-10 flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-4 space-y-4 sm:space-y-5 scroll-smooth"
+      >
+        {messages.length === 0 ? (
+          /* ================= Empty / Welcome State with 3D Animated Bot ================= */
+          <div className="flex flex-col items-center justify-center min-h-full py-4 text-center animate-fade-in max-w-2xl mx-auto">
+            {/* Interactive 3D Animated Chatbot Avatar */}
+            <Chatbot3DAvatar className="mb-2" />
+
+            {/* Title & Description */}
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
+              AI Health & Clinical Assistant
+            </h2>
+            <p className="mt-1.5 text-xs sm:text-sm text-muted-foreground max-w-lg leading-relaxed">
+              Your 24/7 intelligent companion for symptom assessment, verified medication monographs, first aid protocols, and clinical queries.
+            </p>
+
+            {/* WhatsApp / Medical Security Notice */}
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card/80 border border-border/70 text-[11px] font-medium text-muted-foreground shadow-xs">
+              <Lock className="h-3 w-3 text-emerald-600" />
+              <span>Private & confidential patient consultation session</span>
             </div>
-            <div className="aurora-card rounded-2xl rounded-tl-xs px-5 py-3.5">
-              <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium text-[#475569] dark:text-slate-300">
-                <span className="flex space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-2 h-2 rounded-full bg-[#2563EB] animate-bounce" />
-                </span>
-                <span>Evaluating symptoms & checking regulatory medical monographs...</span>
+
+            {/* Interactive Starter Cards Grid */}
+            <div className="mt-6 w-full grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-left">
+              {STARTER_CARDS.map((card, idx) => {
+                const IconComponent = card.icon;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => onSelectPrompt?.(card.prompt)}
+                    className="group relative p-3.5 rounded-2xl border border-border/80 bg-card/90 backdrop-blur-md hover:bg-card hover:border-primary/50 shadow-xs hover:shadow-md transition-all text-left flex items-start gap-3 active:scale-[0.99]"
+                  >
+                    <div className="p-2 rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors flex-shrink-0 mt-0.5">
+                      <IconComponent className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                          {card.title}
+                        </span>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-full bg-muted text-muted-foreground border border-border/50">
+                          {card.badge}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5 leading-snug">
+                        {card.desc}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Responsible Medical Notice */}
+            <div className="mt-6 w-full rounded-2xl border border-border/70 bg-card/85 backdrop-blur-md p-3.5 text-left shadow-xs">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-primary mb-1">
+                <Shield className="h-3.5 w-3.5" />
+                <span>Medically Responsible AI Disclaimer</span>
+              </div>
+              <ul className="text-[11px] text-muted-foreground space-y-1 list-disc list-inside leading-relaxed">
+                <li>Direct real-time clinical intelligence powered by Velora Clinical AI.</li>
+                <li>This guidance is educational and does <strong>not</strong> substitute professional medical advice.</li>
+                <li>In any acute medical emergency, immediately dial <strong>108 / 112</strong> or visit the nearest ER.</li>
+              </ul>
+            </div>
+          </div>
+        ) : (
+          /* ================= Conversation Messages List ================= */
+          <>
+            {/* WhatsApp-style Session Date / Security Banner */}
+            <div className="flex justify-center select-none pt-1 pb-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-card/90 border border-border/70 shadow-xs text-[11px] font-medium text-muted-foreground">
+                <Lock className="h-3 w-3 text-emerald-600" />
+                <span>Messages are encrypted & clinically audited</span>
               </div>
             </div>
-          </div>
-        )}
 
-        {/* Error state with retry */}
-        {error && (
-          <div className="flex items-center justify-between p-4 rounded-2xl border border-rose-300/70 bg-rose-50/90 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs sm:text-sm animate-shake shadow-xs">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4.5 w-4.5 flex-shrink-0 text-rose-600" />
-              <span>{error}</span>
-            </div>
-            {onRetry && (
-              <button
-                onClick={onRetry}
-                className="inline-flex items-center gap-1.5 font-semibold underline hover:opacity-80 ml-2 text-rose-700 dark:text-rose-300"
-              >
-                <RefreshCw className="h-3.5 w-3.5" /> Retry
-              </button>
+            {messages.map((msg, idx) => (
+              <ChatMessageItem key={msg.id || idx} message={msg} />
+            ))}
+
+            {/* Loading Typing Indicator */}
+            {isLoading && <ChatTypingIndicator />}
+
+            {/* Error Message with Retry */}
+            {error && (
+              <div className="flex items-center justify-between p-3.5 rounded-2xl border border-destructive/30 bg-destructive/10 text-destructive text-xs sm:text-sm animate-shake shadow-xs">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+                {onRetry && (
+                  <button
+                    onClick={onRetry}
+                    className="inline-flex items-center gap-1 font-semibold underline hover:opacity-80 px-2 py-1 rounded-lg hover:bg-destructive/15 transition-colors"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" /> Retry
+                  </button>
+                )}
+              </div>
             )}
-          </div>
+          </>
         )}
 
-        <div ref={scrollEndRef} />
+        {/* Universal scroll anchor present in both welcome state and active chat */}
+        <div ref={scrollEndRef} className="h-1 pointer-events-none" />
       </div>
+
+      {/* Floating Scroll to Bottom Button */}
+      {showScrollBottom && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom(true)}
+          className="absolute bottom-4 right-5 z-20 p-2.5 rounded-full bg-card/95 hover:bg-card border border-border shadow-lg text-foreground hover:text-primary transition-all duration-200 active:scale-95 animate-fade-in group flex items-center justify-center"
+          title="Scroll to latest message"
+        >
+          <ArrowDown className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+        </button>
+      )}
     </div>
   );
 };

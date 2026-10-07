@@ -57,6 +57,7 @@ class ChatSession(models.Model):
         Patient, on_delete=models.CASCADE, related_name="ai_chat_sessions"
     )
     title = models.CharField(max_length=255, default="Health Consultation")
+    clinical_context = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

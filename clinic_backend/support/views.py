@@ -45,8 +45,8 @@ class QueryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.role == "ADMIN":
-            return Query.objects.all().select_related("user")
-        return Query.objects.filter(user=user).select_related("user")
+            return Query.objects.all().select_related("user").order_by("-created_at")
+        return Query.objects.filter(user=user).select_related("user").order_by("-created_at")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

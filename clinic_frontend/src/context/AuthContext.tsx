@@ -38,12 +38,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const initAuth = async () => {
       try {
         await authService.initCsrf();
-        // Trigger a profile fetch to initialize user state and trigger interceptor refresh if needed
-        try {
-          const freshUser = await authService.getProfile();
-          setUser(freshUser);
-        } catch {
-          // Token might be expired or user not logged in
+
+        // Silently obtain fresh access token from HttpOnly cookie if in-memory token is absent
+        const token = await authService.refreshToken();
+        if (token) {
+          try {
+            const freshUser = await authService.getProfile();
+            setUser(freshUser);
+          } catch {
+            setUser(null);
+          }
+        } else {
           setUser(null);
         }
       } catch (error) {

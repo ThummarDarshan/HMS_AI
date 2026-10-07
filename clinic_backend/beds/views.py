@@ -14,7 +14,7 @@ from accounts.permissions import IsAdminOrStaff
 
 
 class WardViewSet(viewsets.ModelViewSet):
-    queryset = Ward.objects.all()
+    queryset = Ward.objects.all().order_by("name")
     serializer_class = WardSerializer
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
     filter_backends = [filters.SearchFilter]
@@ -22,14 +22,14 @@ class WardViewSet(viewsets.ModelViewSet):
 
 
 class BedViewSet(viewsets.ModelViewSet):
-    queryset = Bed.objects.all()
+    queryset = Bed.objects.all().order_by("id")
     serializer_class = BedSerializer
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
     filter_backends = [filters.SearchFilter]
     search_fields = ["bed_number", "ward__name", "bed_type"]
 
     def get_queryset(self):
-        queryset = Bed.objects.all()
+        queryset = Bed.objects.all().order_by("id")
         ward_id = self.request.query_params.get("ward", None)
         status_param = self.request.query_params.get("status", None)
 
@@ -42,7 +42,7 @@ class BedViewSet(viewsets.ModelViewSet):
 
 
 class BedAllocationViewSet(viewsets.ModelViewSet):
-    queryset = BedAllocation.objects.all()
+    queryset = BedAllocation.objects.all().order_by("-admission_date")
     serializer_class = BedAllocationSerializer
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
     filter_backends = [filters.SearchFilter]
@@ -114,14 +114,14 @@ class BedAllocationViewSet(viewsets.ModelViewSet):
 
 
 class BedRequestViewSet(viewsets.ModelViewSet):
-    queryset = BedRequest.objects.all()
+    queryset = BedRequest.objects.all().order_by("-created_at")
     serializer_class = BedRequestSerializer
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
     filter_backends = [filters.SearchFilter]
     search_fields = ["patient__user__full_name", "doctor__user__full_name"]
 
     def get_queryset(self):
-        qs = BedRequest.objects.all().select_related("patient__user", "doctor__user")
+        qs = BedRequest.objects.all().select_related("patient__user", "doctor__user").order_by("-created_at")
         status_param = self.request.query_params.get("status")
         if status_param:
             qs = qs.filter(status=status_param)

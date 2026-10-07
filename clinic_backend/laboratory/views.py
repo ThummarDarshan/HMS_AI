@@ -9,7 +9,7 @@ from accounts.permissions import IsAdmin, IsLabTechnician, IsDoctor
 
 
 class LabTestTypeViewSet(viewsets.ModelViewSet):
-    queryset = LabTestType.objects.all()
+    queryset = LabTestType.objects.all().order_by("test_name")
     serializer_class = LabTestTypeSerializer
     pagination_class = None
 

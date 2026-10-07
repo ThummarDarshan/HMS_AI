@@ -16,7 +16,6 @@ import {
   FlaskConical,
   TestTubes,
   Sparkles,
-  ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { cn } from '@/lib/utils';
@@ -40,7 +39,6 @@ const menuItems = [
     icon: Sparkles,
     path: '/ai-assistant',
     roles: [ROLES.PATIENT, ROLES.ADMIN, ROLES.DOCTOR],
-    openInNewTab: true,
   },
   {
     title: 'Appointments',
@@ -169,11 +167,12 @@ export const Sidebar = ({ isOpen, onToggle, isMobile = false }: SidebarProps) =>
                 <li key={item.path}>
                   <NavLink
                     to={item.path}
-                    target={item.openInNewTab ? '_blank' : undefined}
-                    rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
                     onClick={() => {
                       if (isMobile) {
                         onToggle();
+                      }
+                      if (item.path === '/ai-assistant') {
+                        window.dispatchEvent(new CustomEvent('trigger-ai-3d-loading'));
                       }
                     }}
                     className={({ isActive }) => cn(
@@ -189,10 +188,7 @@ export const Sidebar = ({ isOpen, onToggle, isMobile = false }: SidebarProps) =>
                         )}
                         <item.icon className={cn('h-5 w-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110', isActive && 'text-primary scale-110')} />
                         {isOpen && (
-                          <span className="animate-fade-in flex-1 text-left">{item.title}</span>
-                        )}
-                        {isOpen && item.openInNewTab && (
-                          <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100 transition-opacity ml-auto" />
+                          <span className="animate-fade-in">{item.title}</span>
                         )}
                       </>
                     )}

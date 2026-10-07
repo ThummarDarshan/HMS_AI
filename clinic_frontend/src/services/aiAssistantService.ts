@@ -38,22 +38,6 @@ export interface AllergyConflictItem {
   warning: string;
 }
 
-export interface LabReportItem {
-  test_name: string;
-  value: number;
-  unit: string;
-  reference_range: string;
-  flag: 'HIGH' | 'LOW' | 'NORMAL' | string;
-  flag_label: string;
-  guidance: string;
-}
-
-export interface ExpandedAbbreviation {
-  abbreviation: string;
-  expansion: string;
-  category: string;
-}
-
 export interface ChatResponse {
   success: boolean;
   session_id: string;
@@ -64,14 +48,8 @@ export interface ChatResponse {
   sources: SourceCitation[];
   redFlags: RedFlagItem[];
   allergyConflicts: AllergyConflictItem[];
-  labReports?: LabReportItem[];
-  differentials?: string[];
-  clinicalState?: Record<string, any>;
-  abbreviationsExpanded?: ExpandedAbbreviation[];
   doctorReviewRequired: boolean;
   emergency: boolean;
-  isCritical?: boolean;
-  informationComplete?: boolean;
 }
 
 export interface ChatMessageRecord {
@@ -84,10 +62,6 @@ export interface ChatMessageRecord {
   sources?: SourceCitation[];
   red_flags?: RedFlagItem[];
   allergy_conflicts?: AllergyConflictItem[];
-  lab_reports?: LabReportItem[];
-  differentials?: string[];
-  clinical_state?: Record<string, any>;
-  abbreviations_expanded?: ExpandedAbbreviation[];
   doctor_review_required?: boolean;
   is_emergency?: boolean;
   created_at?: string;

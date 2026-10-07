@@ -1,55 +1,192 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Copy, Check, ExternalLink, Code } from 'lucide-react';
 
 interface MarkdownRendererProps {
   content: string;
 }
 
 export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) => {
-  // Replace double equal signs ==highlight== with bold or clean format if any LLM output contains it
-  const cleanContent = content.replace(/==(.*?)==/g, '**$1**');
-
   return (
-    <div className="prose prose-slate dark:prose-invert max-w-none text-[#334155] dark:text-slate-200 leading-relaxed text-sm sm:text-[15px]">
+    <div className="markdown-content text-sm leading-relaxed text-foreground/90 space-y-2.5 break-words">
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         components={{
-          h1: ({ node, ...props }) => (
-            <h1 className="text-lg sm:text-xl font-bold text-[#1E3A8A] dark:text-white mt-4 mb-2 flex items-center gap-2" {...props} />
+          h1: ({ children }) => (
+            <h1 className="text-lg font-bold text-foreground mt-4 mb-2 pb-1 border-b border-border/50">
+              {children}
+            </h1>
           ),
-          h2: ({ node, ...props }) => (
-            <h2 className="text-base sm:text-lg font-bold text-[#1E3A8A] dark:text-white mt-4 mb-2 pb-1.5 border-b border-[#D9E2F0] dark:border-slate-800 flex items-center gap-2" {...props} />
+          h2: ({ children }) => (
+            <h2 className="text-base font-bold text-foreground mt-3 mb-1.5 flex items-center gap-1.5">
+              {children}
+            </h2>
           ),
-          h3: ({ node, ...props }) => (
-            <h3 className="text-sm sm:text-base font-bold text-[#1E3A8A] dark:text-sky-200 mt-3 mb-1.5 flex items-center gap-1.5" {...props} />
+          h3: ({ children }) => (
+            <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">
+              {children}
+            </h3>
           ),
-          p: ({ node, ...props }) => (
-            <p className="mb-2.5 last:mb-0 leading-relaxed text-[#334155] dark:text-slate-200 font-normal" {...props} />
+          h4: ({ children }) => (
+            <h4 className="text-xs font-semibold text-foreground uppercase tracking-wider mt-2 mb-1">
+              {children}
+            </h4>
           ),
-          strong: ({ node, ...props }) => (
-            <strong className="font-bold text-[#1E3A8A] dark:text-white" {...props} />
+          p: ({ children }) => (
+            <p className="leading-relaxed mb-2.5 last:mb-0 text-foreground/90">
+              {children}
+            </p>
           ),
-          ul: ({ node, ...props }) => (
-            <ul className="my-2.5 ml-4 space-y-1.5 list-disc list-outside text-[#334155] dark:text-slate-200" {...props} />
+          ul: ({ children }) => (
+            <ul className="space-y-1.5 my-2 pl-5 list-disc marker:text-primary/70">
+              {children}
+            </ul>
           ),
-          ol: ({ node, ...props }) => (
-            <ol className="my-2.5 ml-4 space-y-1.5 list-decimal list-outside text-[#334155] dark:text-slate-200" {...props} />
+          ol: ({ children }) => (
+            <ol className="space-y-1.5 my-2 pl-5 list-decimal marker:text-primary marker:font-semibold">
+              {children}
+            </ol>
           ),
-          li: ({ node, ...props }) => (
-            <li className="pl-1 leading-relaxed text-[#334155] dark:text-slate-200" {...props} />
+          li: ({ children }) => (
+            <li className="leading-relaxed text-foreground/90">
+              {children}
+            </li>
           ),
-          blockquote: ({ node, ...props }) => (
-            <blockquote className="my-3 border-l-4 border-[#2563EB] pl-3.5 italic text-[#1E3A8A] dark:text-blue-200 bg-[#EFF6FF]/70 dark:bg-blue-950/30 py-1.5 rounded-r-xl" {...props} />
+          strong: ({ children }) => (
+            <strong className="font-semibold text-foreground">
+              {children}
+            </strong>
           ),
-          code: ({ node, ...props }) => (
-            <code className="bg-[#F1F5F9] dark:bg-slate-800 px-1.5 py-0.5 rounded text-xs font-mono text-[#2563EB] dark:text-sky-300 font-semibold" {...props} />
+          em: ({ children }) => (
+            <em className="italic text-foreground/90">
+              {children}
+            </em>
           ),
-          hr: () => (
-            <hr className="my-4 border-[#D9E2F0] dark:border-slate-800" />
+          blockquote: ({ children }) => (
+            <blockquote className="my-2.5 pl-3.5 py-1 border-l-4 border-primary/60 bg-primary/5 rounded-r-lg text-muted-foreground italic text-xs">
+              {children}
+            </blockquote>
           ),
+          a: ({ href, children }) => (
+            <a
+              href={href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-0.5 text-primary hover:underline font-medium break-all"
+            >
+              <span>{children}</span>
+              <ExternalLink className="h-3 w-3 inline ml-0.5 opacity-70" />
+            </a>
+          ),
+          table: ({ children }) => (
+            <div className="my-3 overflow-x-auto rounded-xl border border-border bg-card/60 shadow-xs">
+              <table className="min-w-full text-xs text-left divide-y divide-border">
+                {children}
+              </table>
+            </div>
+          ),
+          thead: ({ children }) => (
+            <thead className="bg-muted/70 text-foreground font-semibold">
+              {children}
+            </thead>
+          ),
+          tbody: ({ children }) => (
+            <tbody className="divide-y divide-border/60">
+              {children}
+            </tbody>
+          ),
+          tr: ({ children }) => (
+            <tr className="hover:bg-muted/30 transition-colors">
+              {children}
+            </tr>
+          ),
+          th: ({ children }) => (
+            <th className="px-3 py-2 text-xs font-semibold text-foreground uppercase tracking-wider">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="px-3 py-2 text-xs text-foreground/90">
+              {children}
+            </td>
+          ),
+          hr: () => <hr className="my-3 border-border/60" />,
+          code: ({ className, children, ...props }) => {
+            const isInline = !className && !String(children).includes('\n');
+            const match = /language-(\w+)/.exec(className || '');
+            const language = match ? match[1] : '';
+
+            if (isInline) {
+              return (
+                <code
+                  className="px-1.5 py-0.5 mx-0.5 text-xs font-mono font-medium rounded-md bg-muted text-primary border border-border/50"
+                  {...props}
+                >
+                  {children}
+                </code>
+              );
+            }
+
+            return (
+              <CodeBlock code={String(children).replace(/\n$/, '')} language={language} />
+            );
+          },
         }}
       >
-        {cleanContent}
+        {content}
       </ReactMarkdown>
+    </div>
+  );
+};
+
+interface CodeBlockProps {
+  code: string;
+  language?: string;
+}
+
+const CodeBlock: React.FC<CodeBlockProps> = ({ code, language }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      console.error('Failed to copy code', e);
+    }
+  };
+
+  return (
+    <div className="relative my-3 rounded-xl overflow-hidden border border-border bg-[#0d1117] text-slate-100 shadow-md">
+      <div className="flex items-center justify-between px-3.5 py-1.5 bg-[#161b22] border-b border-border/40 text-xs text-slate-400">
+        <span className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider">
+          <Code className="h-3.5 w-3.5 text-primary" />
+          {language || 'code'}
+        </span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-slate-300 hover:text-white hover:bg-slate-700/60 transition-colors"
+          title="Copy code to clipboard"
+        >
+          {copied ? (
+            <>
+              <Check className="h-3 w-3 text-emerald-400" />
+              <span className="text-emerald-400">Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy className="h-3 w-3" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-3.5 overflow-x-auto text-xs font-mono leading-relaxed text-slate-200">
+        <code>{code}</code>
+      </pre>
     </div>
   );
 };

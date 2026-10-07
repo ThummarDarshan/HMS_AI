@@ -290,7 +290,7 @@ export const Dashboard = () => {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => window.open('/ai-assistant', '_blank')}
+              onClick={() => navigate('/ai-assistant')}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-sm transition-all shadow-sm"
             >
               <Sparkles className="h-4 w-4" />
@@ -470,8 +470,8 @@ export const Dashboard = () => {
                 <h3 className="font-semibold text-lg text-foreground">My Appointments (Last 7 Days)</h3>
               </div>
             </div>
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[300px] w-full min-w-0">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <AreaChart data={patientFlowData}>
                   <defs>
                     <linearGradient id="colorPatients" x1="0" y1="0" x2="0" y2="1">
@@ -716,8 +716,8 @@ export const Dashboard = () => {
             <h3 className="font-semibold text-lg text-foreground mb-1">Request Distribution</h3>
             <p className="text-sm text-muted-foreground mb-6">Current workload status</p>
 
-            <div className="flex-1 min-h-[200px] relative">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="flex-1 min-h-[200px] min-w-0 relative">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={[
@@ -912,8 +912,8 @@ export const Dashboard = () => {
               <p className="text-sm text-muted-foreground">Daily appointment volume</p>
             </div>
           </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-[300px] w-full min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <AreaChart data={patientFlowData}>
                 <defs>
                   <linearGradient id="colorPatients" x1="0" y1="0" x2="0" y2="1">
@@ -939,8 +939,8 @@ export const Dashboard = () => {
           <h3 className="font-semibold text-lg text-foreground mb-1">Bed Occupancy</h3>
           <p className="text-sm text-muted-foreground mb-6">Real-time bed status</p>
 
-          <div className="flex-1 min-h-[200px] relative">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="flex-1 min-h-[200px] min-w-0 relative">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={bedOccupancyData.length > 0 ? bedOccupancyData : [{ name: 'No Data', value: 1, color: '#eee' }]}
