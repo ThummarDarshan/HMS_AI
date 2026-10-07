@@ -171,6 +171,9 @@ export const Sidebar = ({ isOpen, onToggle, isMobile = false }: SidebarProps) =>
                       if (isMobile) {
                         onToggle();
                       }
+                      if (item.path === '/ai-assistant') {
+                        window.dispatchEvent(new CustomEvent('trigger-ai-3d-loading'));
+                      }
                     }}
                     className={({ isActive }) => cn(
                       'group relative overflow-hidden flex items-center py-3 rounded-xl text-muted-foreground font-medium transition-all duration-300 hover:bg-muted/50 hover:text-foreground',

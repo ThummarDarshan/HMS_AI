@@ -285,7 +285,7 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
 
-SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None if DEBUG else "same-origin-allow-popups"
 
 # File upload and request size limits
 DATA_UPLOAD_MAX_MEMORY_SIZE = config("DATA_UPLOAD_MAX_MEMORY_SIZE", default=10 * 1024 * 1024, cast=int)  # 10 MB

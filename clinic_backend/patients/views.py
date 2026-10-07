@@ -72,7 +72,7 @@ class PatientViewSet(viewsets.ModelViewSet):
                          VISITED appointment (prevents URL-guessing attacks)
         """
         user = self.request.user
-        queryset = Patient.objects.all().select_related("user")
+        queryset = Patient.objects.all().select_related("user").order_by("-id")
 
         if user.role in ["ADMIN", "STAFF"]:
             return queryset.filter(user__role="PATIENT")

@@ -8,7 +8,7 @@ from accounts.permissions import IsAdminOrStaff, IsDoctor
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
-    queryset = Department.objects.all()
+    queryset = Department.objects.all().order_by("name")
     serializer_class = DepartmentSerializer
     permission_classes = [IsAuthenticated]
 
@@ -19,7 +19,7 @@ class DepartmentViewSet(viewsets.ModelViewSet):
 
 
 class DoctorViewSet(viewsets.ModelViewSet):
-    queryset = Doctor.objects.all()
+    queryset = Doctor.objects.all().order_by("id")
     serializer_class = DoctorSerializer
     permission_classes = [IsAuthenticated]
 
@@ -29,7 +29,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
         return [IsAdminOrStaff()]
 
     def get_queryset(self):
-        queryset = Doctor.objects.select_related("user", "department")
+        queryset = Doctor.objects.select_related("user", "department").order_by("id")
         return queryset
     def perform_destroy(self, instance):
         user = instance.user

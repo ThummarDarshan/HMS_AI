@@ -6,12 +6,15 @@ EMERGENCY_RED_FLAGS = [
     {
         "category": "Cardiac / Myocardial Infarction",
         "patterns": [
-            r"\bchest pain\b",
+            r"\bsevere chest pain\b",
             r"\bcrushing chest\b",
-            r"\bpain radiating to (left arm|jaw|neck|back)\b",
+            r"\bcrushing chest pain\b",
+            r"\bpain radiating to (left arm|jaw|neck|back|arm|shoulder)\b",
+            r"\b(radiating|spreading) to (my )?(left arm|jaw|neck|back|arm|shoulder)\b",
+            r"\bchest pain.*(?:radiat|arm|jaw|neck|back|breath|faint|sweat)",
             r"\bheart attack\b",
             r"\bsevere chest tightness\b",
-            r"\bchest pressure\b",
+            r"\bsevere chest pressure\b",
         ],
         "reason": "Symptoms suggestive of acute coronary syndrome or myocardial ischemia.",
     },
@@ -20,22 +23,26 @@ EMERGENCY_RED_FLAGS = [
         "patterns": [
             r"\bcan('?t| not) breathe\b",
             r"\bsevere difficulty breathing\b",
+            r"\bsevere shortness of breath\b",
+            r"\bextreme difficulty breathing\b",
             r"\bgasping for (air|breath)\b",
             r"\bsuffocating\b",
             r"\bchoking\b",
             r"\bturning blue\b",
+            r"\bblue (lips|face)\b",
             r"\bcyanosis\b",
             r"\bstridor\b",
+            r"\bunable to breathe\b",
         ],
         "reason": "Signs of severe airway compromise or acute respiratory failure.",
     },
     {
         "category": "Stroke / Neurological Emergency",
         "patterns": [
-            r"\bface (droop|drooping)\b",
+            r"\bface (is )?(droop|drooping)\b",
             r"\bsudden (numbness|paralysis|weakness) on one side\b",
             r"\bslurred speech\b",
-            r"\bunable to speak\b",
+            r"\b(can'?t|cannot|unable to) speak( properly)?\b",
             r"\bthunderclap headache\b",
             r"\bworst headache of my life\b",
             r"\bseizure\b",
@@ -48,10 +55,13 @@ EMERGENCY_RED_FLAGS = [
         "patterns": [
             r"\buncontrolled bleeding\b",
             r"\bsevere bleeding\b",
+            r"\bbleeding heavily\b",
+            r"\bheavy bleeding\b",
             r"\bvomiting (blood|coffee ground)\b",
             r"\bcoughing up blood\b",
             r"\bhemoptysis\b",
             r"\bloss of consciousness\b",
+            r"\b(i am |is )?unconscious\b",
             r"\bpassed out\b",
             r"\bunresponsive\b",
             r"\bfainted\b",
@@ -67,6 +77,16 @@ EMERGENCY_RED_FLAGS = [
             r"\ballergic shock\b",
         ],
         "reason": "Acute systemic allergic reaction with imminent airway compromise.",
+    },
+    {
+        "category": "Severe Trauma / Accident",
+        "patterns": [
+            r"\bserious trauma\b",
+            r"\bsevere head injury\b",
+            r"\bmotor vehicle accident\b",
+            r"\bhit by a car\b",
+        ],
+        "reason": "Acute high-impact physical trauma requiring urgent trauma center evaluation.",
     },
     {
         "category": "Psychiatric Emergency / Self-Harm",
@@ -110,13 +130,13 @@ class EmergencyDetector:
         if detected_flags:
             emergency_message = (
                 "🚨 **URGENT MEDICAL ATTENTION REQUIRED**\n\n"
-                "Your message describes symptoms that may indicate a **critical medical emergency** "
-                f"({', '.join([f['category'] for f in detected_flags])}).\n\n"
-                "**Please take immediate action:**\n"
-                "- **Call Emergency Medical Services (108 / 112 in India / 911)** immediately.\n"
-                "- Go to the nearest Hospital Emergency Department right now.\n"
+                "Your symptoms may indicate a critical medical emergency "
+                f"({', '.join([f['category'] for f in detected_flags])}). "
+                "Please seek immediate medical attention.\n\n"
+                "**Call Emergency Medical Services (108 / 112 in India / 911) or go to the nearest hospital emergency department immediately.**\n\n"
                 "- Do NOT wait for an online chat or delay in-person emergency care.\n"
-                "- If you are experiencing suicidal thoughts, contact the National Tele-MANAS helpline at **14416** or **1800 891 4416**."
+                "- If you are experiencing suicidal thoughts, contact the National Tele-MANAS helpline at **14416** or **1800 891 4416**.\n\n"
+                "*Do not rely on this chatbot for emergency treatment.*"
             )
             return True, detected_flags, emergency_message
 

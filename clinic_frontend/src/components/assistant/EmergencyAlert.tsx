@@ -18,7 +18,7 @@ export const EmergencyAlert: React.FC<EmergencyAlertProps> = ({ redFlags }) => {
             Emergency Medical Alert
           </h3>
           <p className="mt-1 text-sm text-red-900 dark:text-red-200 leading-relaxed font-medium">
-            Your message describes symptoms requiring **immediate in-person medical evaluation**. 
+            Your message describes symptoms requiring **immediate in-person medical evaluation**.
             Do not wait for online chat or rely on automated advice.
           </p>
 

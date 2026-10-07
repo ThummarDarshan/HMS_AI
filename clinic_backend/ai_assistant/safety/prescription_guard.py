@@ -4,12 +4,16 @@ from typing import Tuple, Dict, Any, List
 
 PRESCRIPTION_INTENT_PATTERNS = [
     r"\bwhat (medicine|drug|tablet|pill|antibiotic) (should|can|do) i (take|use|have)\b",
-    r"\bprescribe (me|for me)\b",
-    r"\bgive me (a prescription|medicine|antibiotics)\b",
-    r"\bwhich medicine is best for\b",
-    r"\btell me what to take\b",
-    r"\bcan i take (antibiotic|azithromycin|amoxicillin)\b",
-    r"\bwhat dose should i take\b",
+    r"\bwhat (dose|dosage) (should|do|can) i (take|have)\b",
+    r"\bwhat (dose|dosage) of \w+ (should|do|can) i (take|have)\b",
+    r"\bprescribe (me|for me|medicine|drugs?|tablets?|antibiotics?)\b",
+    r"\b(can you|could you|please) prescribe\b",
+    r"\bgive me (a prescription|medicine|antibiotics?)\b",
+    r"\bwhich (medicine|drug|antibiotic) is best for\b",
+    r"\btell me what (medicine|antibiotic) to take\b",
+    r"\bcan i take (antibiotic|azithromycin|amoxicillin|ciprofloxacin|augmentin)\b",
+    r"\bneed (an antibiotic|a prescription|antibiotics)\b",
+    r"\bwrite (me )?a prescription\b",
 ]
 
 INJECTION_PATTERNS = [
@@ -39,11 +43,8 @@ class PrescriptionGuard:
     @classmethod
     def get_anti_prescription_disclaimer(cls) -> str:
         return (
-            "⚠️ **Medication Prescribing Policy Notice**\n\n"
-            "As an AI Health Assistant, I cannot diagnose medical conditions or prescribe medications. "
-            "Medication selection, dosing, and duration must always be determined by a qualified physician "
-            "based on an in-person or clinical telehealth examination, your medical history, and clinical lab investigations.\n\n"
-            "Below is verified informational documentation regarding medications commonly associated with these symptoms, "
-            "along with warnings and contraindications from official regulatory sources (CDSCO / DailyMed). "
-            "Please consult your hospital doctor before starting, stopping, or altering any medication."
+            "⚠️ **Medication Safety Notice**\n\n"
+            "I can provide general educational information about medications, but I cannot diagnose your condition or prescribe a personalized medication or dosage. "
+            "Medication selection, dosing, and duration must always be determined by a qualified healthcare professional based on an in-person or clinical examination.\n\n"
+            "Would you like help finding or booking an appointment with a hospital doctor? You can book directly via the [Book Appointment](/appointments/new) page."
         )

@@ -108,29 +108,60 @@ class ClinicalStateEngine:
     @classmethod
     def is_pure_monograph_query(cls, text: str) -> bool:
         """
-        Distinguishes pure informational queries (e.g. 'What is paracetamol used for?')
-        from personal symptom descriptions or treatment requests.
+        Distinguishes pure informational queries (e.g. 'What is paracetamol used for?',
+        hospital services, first aid, condition overviews, health FAQs)
+        from personal symptom descriptions requiring dynamic clarification.
         """
         text_lower = text.lower().strip()
 
-        # If user expresses personal symptoms, it's not pure informational
+        # If user expresses personal suffering or urgent self-symptom descriptions
         personal_indicators = [
-            r"\bi have\b", r"\bi am suffering\b", r"\bmy \w+\b", r"\bme\b",
-            r"\bi am feeling\b", r"\bstarted since\b", r"\bwhat should i take\b",
-            r"\bwhat medicine should i take\b", r"\bwhich medicine is good\b",
-            r"\bcan i take\b", r"\bprescribe\b", r"\bi got\b", r"\bfor my\b"
+            r"\bi have (severe|a|my)?\s*(fever|loose motion|diarrhea|vomiting|cough|stomach pain|diabetes|high blood pressure|hypertension|asthma|migraine|rash|chest pain)",
+            r"\bi (have|got|am having|feel|am feeling|been having)\b",
+            r"\bi am suffering (from)?",
+            r"\bi am feeling (sick|dizzy|nauseous)",
+            r"\bmy (stomach|head|throat|belly|chest|bp|blood pressure|sugar) (hurts|is hurting|pains|aches|is high|high)",
+            r"\bstarted since\b",
+            r"\bwhat should i take for my\b",
+            r"\bwhich medicine is best for my\b",
         ]
         has_personal = any(re.search(pat, text_lower) for pat in personal_indicators)
         if has_personal:
             return False
 
-        # General informational questions
+        # Domain keywords for hospital services, first aid, and general health
+        general_health_keywords = [
+            r"\bvisiting hour", r"\bvisiting time", r"\bappointment", r"\bopd\b",
+            r"\bhospital service", r"\bdoctor timing", r"\bbooking\b", r"\bbook doctor",
+            r"\bfirst aid\b", r"\bburns?\b", r"\bbleeding\b", r"\bfainting\b", r"\bchoking\b",
+            r"\bheimlich\b", r"\bcpr\b", r"\bseizure\b", r"\bfracture\b", r"\bsnake bite",
+            r"\bdengue\b", r"\bmalaria\b", r"\btyphoid\b", r"\bdiabetes\b", r"\bhypertension\b",
+            r"\bblood pressure\b", r"\basthma\b", r"\bgerd\b", r"\bacidity\b", r"\bgastritis\b",
+            r"\bfood poisoning\b", r"\bkidney stone", r"\buti\b", r"\burinary infection",
+            r"\bwater intake\b", r"\bhydration\b", r"\bdash diet\b", r"\bdiabetic diet\b",
+            r"\bvaccin", r"\bsleep hygiene\b", r"\binsomnia\b", r"\bantibiotic stewardship\b",
+            r"\bmedication storage\b", r"\bprenatal\b", r"\bpregnancy test", r"\bpathology\b",
+            r"\blaboratory\b", r"\bradiology\b", r"\bx-ray\b", r"\bmri\b", r"\bct scan\b",
+            r"\bpharmacy\b", r"\bcashless\b", r"\btpa\b", r"\binsurance\b", r"\badmission\b",
+            r"\bdischarge\b", r"\bcheckup package", r"\bemergency\b", r"\bhelpline\b"
+        ]
+        if any(re.search(kw, text_lower) for kw in general_health_keywords):
+            return True
+
+        # General informational question patterns
         info_patterns = [
-            r"^what is [a-zA-Z\s]+ used for\??$",
-            r"^what are the (side effects|warnings|contraindications|uses|interactions) of [a-zA-Z\s]+\??$",
-            r"^tell me about [a-zA-Z\s]+\??$",
-            r"^information on [a-zA-Z\s]+\??$",
-            r"^what does the (official|regulatory|cdsco|dailymed) documentation say about [a-zA-Z\s]+\??$",
+            r"^what (is|are|does)",
+            r"^how (can|do|to|does|is)",
+            r"^when (is|are|should|can)",
+            r"^where (is|are|can)",
+            r"^tell me about",
+            r"^explain\b",
+            r"^give (me )?(information|info|details) (about|on)",
+            r"^information (about|on)",
+            r"^can (i|you|we)",
+            r"used for\??$",
+            r"(side effects|warnings|contraindications|uses|interactions|dosage|benefits)",
+            r"(symptoms of|causes of|treatment of|diagnosis of|tests for)",
         ]
         return any(re.search(pat, text_lower) for pat in info_patterns)
 
@@ -225,45 +256,25 @@ class ClinicalStateEngine:
         user_message: str,
     ) -> str:
         """
-        Generates conversational, non-overwhelming follow-up questions (2-3 max)
-        tailored to the specific complaint and missing information.
+        Generates conversational, single-question clarification strictly adhering to
+        the ONE QUESTION AT A TIME clinical requirement.
         """
         protocols = state.get("detectedProtocols", [])
         has_age = state.get("age") is not None
-        has_duration = state.get("hasDuration", False)
         complaint = state.get("chiefComplaint", "your symptoms")
-
-        response_lines = [
-            f"I can help you understand verified information regarding **{complaint}**, but before we discuss medication details, I need a little more context to ensure safety:\n"
-        ]
-
-        questions = []
 
         # 1. Ask age only if NOT in profile and not provided yet
         if not has_age:
-            questions.append("How old are you? (Medication safety and dosing depend significantly on age).")
+            return (
+                f"I'm sorry you are experiencing {complaint}. I can help you understand your symptoms and provide general health information.\n\n"
+                "**First, how old are you?**"
+            )
 
-        # 2. Symptom specific questions
+        # 2. Ask the single next clinically relevant question
         if protocols:
             proto_key = protocols[0]
             proto = SYMPTOM_PROTOCOLS.get(proto_key)
-            if proto:
-                for q in proto["questions"]:
-                    if len(questions) < 3:
-                        questions.append(q)
+            if proto and proto.get("questions"):
+                return f"Thank you for clarifying. **{proto['questions'][0]}**"
 
-        # 3. Fallback general questions if not specific
-        if len(questions) < 2:
-            if not has_duration:
-                questions.append("When did your symptoms start, and are they getting better or worse?")
-            questions.append("Are you currently experiencing any severe symptoms, fever, or inability to keep fluids down?")
-
-        # Number and format questions cleanly
-        for i, q in enumerate(questions[:3], 1):
-            response_lines.append(f"**{i}.** {q}")
-
-        response_lines.append(
-            "\n*Your answers help provide accurate, evidence-backed information from approved regulatory documentation.*"
-        )
-
-        return "\n".join(response_lines)
+        return "Thank you for clarifying. **How long have you had these symptoms?**"

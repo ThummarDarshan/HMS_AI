@@ -52,6 +52,7 @@ class ChatSessionSerializer(serializers.ModelSerializer):
             "id",
             "patient",
             "title",
+            "clinical_context",
             "created_at",
             "updated_at",
             "messages",
@@ -60,6 +61,51 @@ class ChatSessionSerializer(serializers.ModelSerializer):
         read_only_fields = ["patient", "created_at", "updated_at"]
 
     def get_last_message(self, obj):
+        # Use prefetched in-memory messages if available to prevent N+1 remote database roundtrips
+        if hasattr(obj, "_prefetched_objects_cache") and "messages" in obj._prefetched_objects_cache:
+            msgs = obj._prefetched_objects_cache["messages"]
+            if msgs:
+                last_msg = sorted(msgs, key=lambda m: m.created_at, reverse=True)[0]
+                return {
+                    "role": last_msg.role,
+                    "content": last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else ""),
+                    "created_at": last_msg.created_at,
+                }
+            return None
+        last_msg = obj.messages.order_by("-created_at").first()
+        if last_msg:
+            return {
+                "role": last_msg.role,
+                "content": last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else ""),
+                "created_at": last_msg.created_at,
+            }
+class ChatSessionListSerializer(serializers.ModelSerializer):
+    last_message = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ChatSession
+        fields = [
+            "id",
+            "patient",
+            "title",
+            "clinical_context",
+            "created_at",
+            "updated_at",
+            "last_message",
+        ]
+        read_only_fields = ["patient", "created_at", "updated_at"]
+
+    def get_last_message(self, obj):
+        if hasattr(obj, "_prefetched_objects_cache") and "messages" in obj._prefetched_objects_cache:
+            msgs = obj._prefetched_objects_cache["messages"]
+            if msgs:
+                last_msg = sorted(msgs, key=lambda m: m.created_at, reverse=True)[0]
+                return {
+                    "role": last_msg.role,
+                    "content": last_msg.content[:100] + ("..." if len(last_msg.content) > 100 else ""),
+                    "created_at": last_msg.created_at,
+                }
+            return None
         last_msg = obj.messages.order_by("-created_at").first()
         if last_msg:
             return {

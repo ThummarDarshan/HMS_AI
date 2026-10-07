@@ -104,6 +104,20 @@ export const authService = {
     await api.get('/accounts/csrf/');
   },
 
+  async refreshToken(): Promise<string | null> {
+    try {
+      const response = await api.post('/accounts/users/token/refresh/');
+      const access = response.data?.access;
+      if (access) {
+        tokenStore.setToken(access);
+        return access;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+
   async logout(): Promise<void> {
     try {
       await api.post('/accounts/users/logout/');

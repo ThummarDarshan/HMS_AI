@@ -27,7 +27,7 @@ class BillingViewSet(viewsets.ModelViewSet):
             "appointment__patient__user",
             "appointment__doctor__user",
             "patient__user",
-        ).prefetch_related("appointment__prescriptions")
+        ).prefetch_related("appointment__prescriptions").order_by("-created_at")
 
         if user.role in ["ADMIN", "STAFF"]:
             return base_qs

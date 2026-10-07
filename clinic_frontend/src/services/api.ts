@@ -44,6 +44,24 @@ api.interceptors.request.use(
   }
 );
 
+// Queue to prevent duplicate concurrent refresh requests
+let isRefreshing = false;
+let failedQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: any) => void;
+}> = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+};
+
 // Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
@@ -52,7 +70,20 @@ api.interceptors.response.use(
 
     // If 401 error and not already retrying
     if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // Wait for the ongoing refresh to finish
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
         const getCookie = (name: string) => {
@@ -71,12 +102,16 @@ api.interceptors.response.use(
         const { access } = response.data;
         tokenStore.setToken(access);
 
+        processQueue(null, access);
+
         originalRequest.headers.Authorization = `Bearer ${access}`;
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed, clear token and return error. React Router (PrivateRoute) will handle redirects.
+        processQueue(refreshError, null);
         tokenStore.clearToken();
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 

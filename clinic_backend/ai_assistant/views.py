@@ -10,15 +10,16 @@ from ai_assistant.models import MedicationDocument, ChatSession, ChatMessage
 from ai_assistant.serializers import (
     MedicationDocumentSerializer,
     ChatSessionSerializer,
+    ChatSessionListSerializer,
     ChatMessageSerializer,
 )
-from ai_assistant.retrieval.search import MedicationRetrievalEngine
 from ai_assistant.safety.emergency_detector import EmergencyDetector
 from ai_assistant.safety.allergy_checker import AllergyChecker
 from ai_assistant.safety.prescription_guard import PrescriptionGuard
 from ai_assistant.safety.clarification_engine import ClinicalStateEngine
+from ai_assistant.clinical.conversation_engine import UniversalClinicalEngine
+from ai_assistant.retrieval.search import MedicationRetrievalEngine
 from ai_assistant.llm.provider import get_llm_provider
-from ai_assistant.ingestion.pipeline import MedicationIngestionPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -34,10 +35,10 @@ def get_or_create_patient_for_user(user) -> Patient:
 
 class PatientChatAPIView(APIView):
     """
-    Core AI Health & Medication Assistant Chat API.
-    Enforces dynamic clarification questioning, emergency screening,
-    patient allergy conflict checking, anti-prescription guardrails,
-    and authoritative CDSCO/DailyMed RAG retrieval.
+    Core AI Health Assistant Chat API.
+    Operates directly via Google Gemini API key.
+    Provides intelligent medical guidance, symptom assistance, first aid advice,
+    and emergency red-flag screening.
     """
     permission_classes = [permissions.IsAuthenticated]
 
@@ -73,7 +74,7 @@ class PatientChatAPIView(APIView):
             title = message_text[:40] + ("..." if len(message_text) > 40 else "")
             session = ChatSession.objects.create(patient=patient, title=title)
 
-        past_messages = list(session.messages.all())
+        past_messages = list(session.messages.order_by("created_at"))
 
         # 2. Record User Message
         user_msg = ChatMessage.objects.create(
@@ -82,7 +83,7 @@ class PatientChatAPIView(APIView):
             content=message_text,
         )
 
-        # 3. Step 1: Emergency Red Flag Screening (Always First)
+        # 3. Emergency Red Flag Screening (HIGHEST PRIORITY)
         is_emergency, red_flags, emergency_guidance = EmergencyDetector.evaluate(message_text)
         if is_emergency:
             assistant_msg = ChatMessage.objects.create(
@@ -94,6 +95,7 @@ class PatientChatAPIView(APIView):
                 doctor_review_required=True,
                 is_emergency=True,
             )
+            session.save()
             return Response({
                 "success": True,
                 "session_id": str(session.id),
@@ -106,106 +108,279 @@ class PatientChatAPIView(APIView):
                 "allergyConflicts": [],
                 "doctorReviewRequired": True,
                 "emergency": True,
+                "informationComplete": True,
+            })
+
+        # 4. Anti-prescription detection & Prompt Injection Check
+        is_injection = PrescriptionGuard.detect_prompt_injection(message_text)
+        if is_injection:
+            safety_msg = (
+                "I am Velora AI Care, a safety-focused clinical assistant. "
+                "I cannot bypass safety guidelines or alter my role as an educational medical assistant. "
+                "How can I assist you with your health or hospital services today?"
+            )
+            ChatMessage.objects.create(session=session, role="assistant", content=safety_msg, intent="SAFETY_POLICY")
+            return Response({
+                "success": True,
+                "session_id": str(session.id),
+                "intent": "SAFETY_POLICY",
+                "answer": safety_msg,
+                "symptoms": [],
+                "medications": [],
+                "sources": [],
+                "redFlags": [],
+                "allergyConflicts": [],
+                "doctorReviewRequired": False,
+                "emergency": False,
+                "informationComplete": True,
+            })
+
+        is_prescription_req = PrescriptionGuard.is_prescription_request(message_text)
+
+        # 5. Pure Informational / Monograph vs Stateful Clinical Consultation
+        is_pure_monograph = ClinicalStateEngine.is_pure_monograph_query(message_text)
+
+        if is_pure_monograph:
+            retrieval_res = MedicationRetrievalEngine.retrieve(message_text)
+            sources = retrieval_res.get("sources", [])
+            medications_data = retrieval_res.get("medications", [])
+            target_drugs = retrieval_res.get("target_drugs", [])
+
+            allergy_conflicts = []
+            if target_drugs:
+                allergy_conflicts = AllergyChecker.check_patient_allergies(patient, target_drugs)
+
+            patient_age = getattr(patient, "age", None)
+            if not patient_age and hasattr(patient, "date_of_birth") and patient.date_of_birth:
+                import datetime
+                today = datetime.date.today()
+                dob = patient.date_of_birth
+                patient_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+            patient_ctx = {
+                "full_name": user.full_name if hasattr(user, "full_name") else user.username,
+                "allergies": patient.allergies or "",
+                "medical_history": patient.medical_history or "",
+                "gender": getattr(patient, "gender", ""),
+                "age": patient_age or "",
+            }
+
+            llm = get_llm_provider()
+            answer = llm.generate_chat_response(
+                user_message=message_text,
+                chat_history=past_messages,
+                patient_context=patient_ctx,
+            )
+
+            intent = "MEDICATION_INFORMATION" if (target_drugs or medications_data) else "AI_CONSULTATION"
+            if is_prescription_req:
+                disclaimer = PrescriptionGuard.get_anti_prescription_disclaimer()
+                if "Medication Safety Notice" not in answer:
+                    answer = f"{disclaimer}\n\n{answer}"
+                intent = "PRESCRIPTION_REQUEST"
+
+            ChatMessage.objects.create(
+                session=session,
+                role="assistant",
+                content=answer,
+                intent=intent,
+                symptoms=retrieval_res.get("symptoms", []),
+                medications_data=medications_data,
+                sources=sources,
+                red_flags=[],
+                doctor_review_required=True,
+                is_emergency=False,
+            )
+            session.save()
+
+            return Response({
+                "success": True,
+                "session_id": str(session.id),
+                "intent": intent,
+                "answer": answer,
+                "symptoms": retrieval_res.get("symptoms", []),
+                "medications": medications_data,
+                "sources": sources,
+                "redFlags": [],
+                "allergyConflicts": allergy_conflicts,
+                "doctorReviewRequired": True,
+                "emergency": False,
+                "informationComplete": True,
+            })
+
+        # 6. Universal Clinical Conversation Engine (Stateful, One Question at a Time)
+        turn_result = UniversalClinicalEngine.evaluate_turn(
+            user_message=message_text,
+            session_context=session.clinical_context,
+            patient=patient,
+            chat_history=past_messages,
+        )
+
+        # Handle emergency triggered during conversation turn
+        if turn_result.get("is_emergency"):
+            emergency_ans = turn_result["answer"]
+            ChatMessage.objects.create(
+                session=session,
+                role="assistant",
+                content=emergency_ans,
+                intent="EMERGENCY",
+                red_flags=turn_result.get("red_flags", []),
+                doctor_review_required=True,
+                is_emergency=True,
+            )
+            session.clinical_context = turn_result.get("context", {})
+            session.save()
+            return Response({
+                "success": True,
+                "session_id": str(session.id),
+                "intent": "EMERGENCY",
+                "answer": emergency_ans,
+                "symptoms": turn_result.get("symptoms", []),
+                "medications": [],
+                "sources": [],
+                "redFlags": turn_result.get("red_flags", []),
+                "allergyConflicts": [],
+                "doctorReviewRequired": True,
+                "emergency": True,
+                "informationComplete": True,
+            })
+
+        # If general health question (e.g. general curiosity not matching clinical conditions)
+        if turn_result.get("intent") == "GENERAL_HEALTH":
+            retrieval_res = MedicationRetrievalEngine.retrieve(message_text)
+            patient_age = getattr(patient, "age", None)
+            if not patient_age and hasattr(patient, "date_of_birth") and patient.date_of_birth:
+                import datetime
+                today = datetime.date.today()
+                dob = patient.date_of_birth
+                patient_age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
+            patient_ctx = {
+                "full_name": user.full_name if hasattr(user, "full_name") else user.username,
+                "allergies": patient.allergies or "",
+                "medical_history": patient.medical_history or "",
+                "gender": getattr(patient, "gender", ""),
+                "age": patient_age or "",
+            }
+
+            llm = get_llm_provider()
+            answer = llm.generate_chat_response(
+                user_message=message_text,
+                chat_history=past_messages,
+                patient_context=patient_ctx,
+            )
+            if is_prescription_req:
+                disclaimer = PrescriptionGuard.get_anti_prescription_disclaimer()
+                if "Medication Safety Notice" not in answer:
+                    answer = f"{disclaimer}\n\n{answer}"
+
+            ChatMessage.objects.create(
+                session=session,
+                role="assistant",
+                content=answer,
+                intent="AI_CONSULTATION",
+                symptoms=[],
+                medications_data=[],
+                sources=retrieval_res.get("sources", []),
+                red_flags=[],
+                doctor_review_required=True,
+                is_emergency=False,
+            )
+            session.save()
+
+            return Response({
+                "success": True,
+                "session_id": str(session.id),
+                "intent": "AI_CONSULTATION",
+                "answer": answer,
+                "symptoms": [],
+                "medications": [],
+                "sources": retrieval_res.get("sources", []),
+                "redFlags": [],
+                "allergyConflicts": [],
+                "doctorReviewRequired": True,
+                "emergency": False,
+                "informationComplete": True,
+            })
+
+        # If Asking ONE QUESTION AT A TIME
+        if turn_result.get("intent") == "SYMPTOM_CLARIFICATION":
+            session.clinical_context = turn_result.get("context", {})
+            # Update session title if first turn
+            if session.messages.filter(role="assistant").count() == 0 and turn_result.get("symptoms"):
+                session.title = f"Consultation: {turn_result['symptoms'][0]}"
+            session.save()
+
+            clarification_answer = turn_result["answer"]
+            ChatMessage.objects.create(
+                session=session,
+                role="assistant",
+                content=clarification_answer,
+                intent="SYMPTOM_CLARIFICATION",
+                symptoms=turn_result.get("symptoms", []),
+                medications_data=[],  # Crucial: never dump monograph during questioning!
+                sources=[],           # Crucial: never dump sources during questioning!
+                red_flags=[],
+                doctor_review_required=True,
+                is_emergency=False,
+            )
+
+            return Response({
+                "success": True,
+                "session_id": str(session.id),
+                "intent": "SYMPTOM_CLARIFICATION",
+                "answer": clarification_answer,
+                "symptoms": turn_result.get("symptoms", []),
+                "medications": [],
+                "sources": [],
+                "redFlags": [],
+                "allergyConflicts": [],
+                "doctorReviewRequired": True,
+                "emergency": False,
                 "informationComplete": False,
             })
 
-        # 4. Check if it's a Pure Informational Monograph Query (e.g. 'What is paracetamol used for?')
-        is_pure_info = ClinicalStateEngine.is_pure_monograph_query(message_text)
-        is_prescription_req = PrescriptionGuard.is_prescription_request(message_text)
+        # If Clinical Consultation Summary Complete or Follow-up Guidance
+        session.clinical_context = turn_result.get("context", {})
+        session.save()
 
-        # 5. Step 2: Clinical State & Clarification Questioning
-        if not is_pure_info:
-            clinical_state = ClinicalStateEngine.evaluate_clinical_state(
-                current_message=message_text,
-                chat_history=past_messages,
-                patient=patient,
-            )
+        # Retrieve verified medication documentation for condition
+        query_for_retrieval = " ".join(turn_result.get("symptoms", []) + [message_text])
+        retrieval_res = MedicationRetrievalEngine.retrieve(query_for_retrieval)
+        target_drugs = retrieval_res.get("target_drugs", [])
+        allergy_conflicts = AllergyChecker.check_patient_allergies(patient, target_drugs) if target_drugs else []
 
-            # If we do not have enough symptom context yet, ask dynamic clarification questions
-            if not clinical_state.get("informationComplete", False):
-                clarification_answer = ClinicalStateEngine.generate_clarification_response(
-                    state=clinical_state,
-                    user_message=message_text,
-                )
+        meds = retrieval_res.get("medications", []) or turn_result.get("medications", [])
+        srcs = retrieval_res.get("sources", []) or turn_result.get("sources", [])
 
-                assistant_msg = ChatMessage.objects.create(
-                    session=session,
-                    role="assistant",
-                    content=clarification_answer,
-                    intent="SYMPTOM_CLARIFICATION",
-                    symptoms=clinical_state.get("detectedProtocols", []),
-                    doctor_review_required=True,
-                    is_emergency=False,
-                )
-                session.save()
-
-                return Response({
-                    "success": True,
-                    "session_id": str(session.id),
-                    "intent": "SYMPTOM_CLARIFICATION",
-                    "answer": clarification_answer,
-                    "symptoms": clinical_state.get("detectedProtocols", []),
-                    "medications": [],
-                    "sources": [],
-                    "redFlags": [],
-                    "allergyConflicts": [],
-                    "doctorReviewRequired": True,
-                    "emergency": False,
-                    "informationComplete": False,
-                })
-
-        # 6. Step 3: Grounded Document Retrieval
-        retrieved = MedicationRetrievalEngine.retrieve(message_text)
-        medications_data = retrieved.get("medications", [])
-        sources = retrieved.get("sources", [])
-        symptoms = retrieved.get("symptoms", [])
-        intent = "PRESCRIPTION_REQUEST" if is_prescription_req else ("MEDICATION_INFORMATION" if is_pure_info else "SYMPTOM_ASSESSMENT")
-
-        # 7. Step 4: Patient Profile Allergy Conflict Check
-        med_names_to_check = [m["name"] for m in medications_data] + [m.get("generic_name", "") for m in medications_data]
-        allergy_conflicts = AllergyChecker.check_patient_allergies(patient, med_names_to_check)
-
-        # 8. Step 5: LLM / Grounded Synthesis
-        patient_ctx = {
-            "full_name": user.full_name if hasattr(user, "full_name") else user.username,
-            "allergies": patient.allergies or "",
-            "medical_history": patient.medical_history or "",
-        }
-
-        llm = get_llm_provider()
-        answer = llm.generate_chat_response(
-            user_message=message_text,
-            retrieved_context=retrieved,
-            patient_context=patient_ctx,
-        )
-
+        final_answer = turn_result["answer"]
         if is_prescription_req:
             disclaimer = PrescriptionGuard.get_anti_prescription_disclaimer()
-            answer = f"{disclaimer}\n\n{answer}"
+            if "Medication Safety Notice" not in final_answer:
+                final_answer = f"{disclaimer}\n\n{final_answer}"
 
-        # 9. Store Assistant Response in Session History
-        assistant_msg = ChatMessage.objects.create(
+        intent = turn_result.get("intent", "AI_CONSULTATION")
+        ChatMessage.objects.create(
             session=session,
             role="assistant",
-            content=answer,
+            content=final_answer,
             intent=intent,
-            symptoms=symptoms,
-            medications_data=medications_data,
-            sources=sources,
+            symptoms=turn_result.get("symptoms", []),
+            medications_data=meds,
+            sources=srcs,
             red_flags=[],
             doctor_review_required=True,
             is_emergency=False,
         )
-        session.save()
 
         return Response({
             "success": True,
             "session_id": str(session.id),
             "intent": intent,
-            "answer": answer,
-            "symptoms": symptoms,
-            "medications": medications_data,
-            "sources": sources,
+            "answer": final_answer,
+            "symptoms": turn_result.get("symptoms", []),
+            "medications": meds,
+            "sources": srcs,
             "redFlags": [],
             "allergyConflicts": allergy_conflicts,
             "doctorReviewRequired": True,
@@ -220,8 +395,13 @@ class ChatSessionListView(APIView):
 
     def get(self, request):
         patient = get_or_create_patient_for_user(request.user)
-        sessions = ChatSession.objects.filter(patient=patient)
-        serializer = ChatSessionSerializer(sessions, many=True)
+        sessions = (
+            ChatSession.objects
+            .filter(patient=patient)
+            .prefetch_related("messages")
+            .order_by("-updated_at")
+        )
+        serializer = ChatSessionListSerializer(sessions, many=True)
         return Response(serializer.data)
 
     def post(self, request):
@@ -238,7 +418,11 @@ class ChatSessionDetailView(APIView):
 
     def get(self, request, pk):
         patient = get_or_create_patient_for_user(request.user)
-        session = get_object_or_404(ChatSession, id=pk, patient=patient)
+        session = get_object_or_404(
+            ChatSession.objects.prefetch_related("messages"),
+            id=pk,
+            patient=patient,
+        )
         serializer = ChatSessionSerializer(session)
         return Response(serializer.data)
 
@@ -250,7 +434,7 @@ class ChatSessionDetailView(APIView):
 
 
 class MedicationSearchAPIView(APIView):
-    """Search verified medication knowledge base by name, brand, or indication"""
+    """Search medication knowledge base by name, brand, or indication"""
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
@@ -286,18 +470,4 @@ class MedicationDetailAPIView(APIView):
             "source_url": doc.source_url,
             "document_id": doc.document_id,
             "sections": MedicationDocumentSerializer(all_sections, many=True).data,
-        })
-
-
-class SyncMedicationsAPIView(APIView):
-    """Admin / Developer endpoint to trigger knowledge base sync"""
-    permission_classes = [permissions.IsAuthenticated]
-
-    def post(self, request):
-        pipeline = MedicationIngestionPipeline()
-        stats = pipeline.seed_all_verified_monographs()
-        return Response({
-            "message": "Medication knowledge base sync complete.",
-            "stats": stats,
-            "total_documents": MedicationDocument.objects.count(),
         })

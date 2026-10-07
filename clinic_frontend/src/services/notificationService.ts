@@ -16,6 +16,7 @@ export interface Query {
   subject: string;
   message: string;
   admin_reply: string | null;
+  reply?: string | null;
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
   created_at: string;
   updated_at: string;

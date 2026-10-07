@@ -187,3 +187,211 @@ class AIAssistantSafetyAndRetrievalTests(TestCase):
 
         delete_response = self.client.delete(f"/api/ai-assistant/sessions/{session_a.id}/")
         self.assertEqual(delete_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_fever_one_by_one_flow(self):
+        """Test strict one-question-at-a-time conversation for fever"""
+        self.client.force_authenticate(user=self.user_b)  # No DOB in profile
+
+        # Turn 1: User reports fever -> Assistant asks age
+        turn1 = self.client.post("/api/ai-assistant/chat/", {"message": "I have fever"}, format="json")
+        self.assertEqual(turn1.status_code, status.HTTP_200_OK)
+        d1 = turn1.json()
+        session_id = d1["session_id"]
+        self.assertEqual(d1["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(d1["informationComplete"])
+        self.assertEqual(len(d1["medications"]), 0)  # No monograph dump!
+        self.assertIn("how old are you", d1["answer"].lower())
+        self.assertNotIn("how many days", d1["answer"].lower())
+
+        # Turn 2: User answers age 20 -> Assistant asks duration
+        turn2 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "20"}, format="json")
+        d2 = turn2.json()
+        self.assertEqual(d2["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(d2["informationComplete"])
+        self.assertIn("how long have you had the fever", d2["answer"].lower())
+
+        # Turn 3: User answers 2 days -> Assistant asks temperature
+        turn3 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "2 days"}, format="json")
+        d3 = turn3.json()
+        self.assertEqual(d3["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(d3["informationComplete"])
+        self.assertIn("temperature", d3["answer"].lower())
+
+        # Turn 4: User answers 102°F -> Assistant asks other symptoms
+        turn4 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "102°F"}, format="json")
+        d4 = turn4.json()
+        self.assertEqual(d4["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(d4["informationComplete"])
+        self.assertIn("other symptoms", d4["answer"].lower())
+
+        # Turn 5: User answers other symptoms -> Full structured assessment
+        turn5 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "just mild headache and body aches"}, format="json")
+        d5 = turn5.json()
+        self.assertEqual(d5["intent"], "AI_CONSULTATION")
+        self.assertTrue(d5["informationComplete"])
+        self.assertIn("### Summary", d5["answer"])
+        self.assertIn("### What your symptoms may indicate", d5["answer"])
+        self.assertIn("### Warning signs", d5["answer"])
+        self.assertIn("### General self-care", d5["answer"])
+        self.assertIn("### Medication information", d5["answer"])
+        self.assertIn("### When to see a doctor", d5["answer"])
+        self.assertIn("### Sources", d5["answer"])
+
+    def test_fever_context_memory_skip_redundant_questions(self):
+        """Test that already provided info (age and duration) is NOT asked again"""
+        self.client.force_authenticate(user=self.user_b)
+        res = self.client.post("/api/ai-assistant/chat/", {
+            "message": "I'm 20 years old and have had fever for 2 days"
+        }, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(data["informationComplete"])
+        # Should NOT ask age or duration again!
+        self.assertNotIn("how old are you", data["answer"].lower())
+        self.assertNotIn("how long have you had", data["answer"].lower())
+        # Should ask temperature
+        self.assertIn("temperature", data["answer"].lower())
+
+    def test_chest_pain_early_red_flag_screening(self):
+        """Test chest pain triggers early red-flag screening question"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have chest pain"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertFalse(data["informationComplete"])
+        self.assertIn("screening", data["answer"].lower())
+        self.assertIn("severe or crushing", data["answer"].lower())
+
+    def test_emergency_severe_chest_pain_and_breathing(self):
+        """Test acute emergency scenario triggers immediate stop and emergency helpline guidance"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {
+            "message": "I have severe chest pain and difficulty breathing"
+        }, format="json")
+        data = res.json()
+        self.assertTrue(data["emergency"])
+        self.assertEqual(data["intent"], "EMERGENCY")
+        self.assertIn("108", data["answer"])
+
+    def test_shortness_of_breath_emergency_screening(self):
+        """Test shortness of breath triggers emergency screening question"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I'm having difficulty breathing"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("breathing difficulty requires immediate safety assessment", data["answer"].lower())
+
+    def test_cough_one_by_one_flow(self):
+        """Test cough conversation flow"""
+        self.client.force_authenticate(user=self.user_a)  # Age known
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have a cough"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("cough", data["answer"].lower())
+
+    def test_abdominal_pain_flow(self):
+        """Test stomach ache conversation flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "My stomach hurts"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("stomach", data["answer"].lower())
+
+    def test_vomiting_flow(self):
+        """Test vomiting inquiry flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have been vomiting"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("vomit", data["answer"].lower())
+
+    def test_diarrhea_flow(self):
+        """Test diarrhea inquiry flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have diarrhea"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("loose", data["answer"].lower())
+
+    def test_sore_throat_flow(self):
+        """Test sore throat flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "My throat hurts"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("throat", data["answer"].lower())
+
+    def test_dizziness_flow(self):
+        """Test dizziness inquiry flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I feel dizzy"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("dizz", data["answer"].lower())
+
+    def test_back_pain_flow(self):
+        """Test back pain inquiry flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have back pain"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("back", data["answer"].lower())
+
+    def test_skin_rash_flow(self):
+        """Test skin rash inquiry flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have a rash"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("rash", data["answer"].lower())
+
+    def test_diabetes_question_flow(self):
+        """Test chronic diabetes question flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have diabetes"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("diabetes", data["answer"].lower())
+
+    def test_hypertension_question_flow(self):
+        """Test hypertension question flow"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {"message": "I have high blood pressure"}, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("blood pressure", data["answer"].lower())
+
+    def test_multiple_symptoms_cluster(self):
+        """Test cluster of multiple symptoms handled cohesively"""
+        self.client.force_authenticate(user=self.user_a)
+        res = self.client.post("/api/ai-assistant/chat/", {
+            "message": "I have fever, cough and headache"
+        }, format="json")
+        data = res.json()
+        self.assertEqual(data["intent"], "SYMPTOM_CLARIFICATION")
+        self.assertIn("fever", data["answer"].lower())
+
+    def test_followup_question_after_assessment(self):
+        """Test follow-up question in completed consultation does not restart questionnaire"""
+        self.client.force_authenticate(user=self.user_a)
+        # Turn 1
+        turn1 = self.client.post("/api/ai-assistant/chat/", {"message": "I have a headache since yesterday"}, format="json")
+        session_id = turn1.json()["session_id"]
+        # Turn 2 - Complete assessment
+        turn2 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "It is a mild headache, no vision changes or fever"}, format="json")
+        self.assertTrue(turn2.json()["informationComplete"])
+
+        # Turn 3 - Follow-up: home care
+        turn3 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "What can I do at home?"}, format="json")
+        d3 = turn3.json()
+        self.assertEqual(d3["intent"], "FOLLOW_UP_GUIDANCE")
+        self.assertTrue(d3["informationComplete"])
+        self.assertIn("home self-care", d3["answer"].lower())
+
+        # Turn 4 - Follow-up: medication safety
+        turn4 = self.client.post("/api/ai-assistant/chat/", {"session_id": session_id, "message": "Is paracetamol safe?"}, format="json")
+        d4 = turn4.json()
+        self.assertEqual(d4["intent"], "FOLLOW_UP_GUIDANCE")
+        self.assertTrue(d4["informationComplete"])
+        self.assertIn("paracetamol", d4["answer"].lower())
+
